@@ -8,30 +8,24 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Session middleware (required for passport)
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false
 }));
 
-// Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Routes
 app.use('/auth', require('./routes/auth'));
 
-// Test route
 app.get('/', (req, res) => {
-  res.json({ message: 'Juno Rideshare API is running! 🚗' });
+  res.json({ message: 'API is on' });
 });
 
-// Debug route to check database
 app.get('/debug/db', async (req, res) => {
   try {
     const usersResult = await pool.query('SELECT id, username, first_name, last_name, email, created_at FROM users');

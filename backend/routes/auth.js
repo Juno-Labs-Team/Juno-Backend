@@ -6,14 +6,12 @@ const pool = require('../db');
 
 const router = express.Router();
 
-// Configure Google OAuth Strategy
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: "/auth/google/callback"
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    // Check if user exists
     const existingUser = await pool.query(
       'SELECT * FROM users WHERE email = $1',
       [profile.emails[0].value]
@@ -58,7 +56,6 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Routes
 router.get('/google', 
   passport.authenticate('google', { scope: ['profile', 'email'] })
 );
@@ -66,7 +63,6 @@ router.get('/google',
 router.get('/google/callback',
   passport.authenticate('google', { failureRedirect: '/login' }),
   async (req, res) => {
-    // Generate JWT token
     const token = jwt.sign(
       { userId: req.user.id, email: req.user.email },
       process.env.JWT_SECRET,
@@ -89,7 +85,6 @@ router.get('/google/callback',
   }
 );
 
-// Logout route
 router.post('/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });

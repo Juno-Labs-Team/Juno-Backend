@@ -12,7 +12,6 @@ async function setupDatabase() {
     
     console.log('✅ Database schema created successfully!');
     
-    // Test data (optional)
     console.log('📝 Adding test data...');
     
     await pool.query(`
