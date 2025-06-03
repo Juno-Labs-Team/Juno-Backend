@@ -8,7 +8,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useColorScheme } from 'react-native';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // ✅ Correct Import
+import { Ionicons } from '@expo/vector-icons'; 
 import SearchScreen from './components/SearchScreen';
 import AddFriendScreen from './components/AddFriendScreen';
 import friendsData from './components/PlayerDatabase.json'
