@@ -39,7 +39,7 @@ func handleGoogleCallback(c *gin.Context) {
 		Code string `json:"code"`
 	}
 
-	if err := c.ShouldBindJSON(&reqBody); err != nil {
+	if err := c.ShouldBindJSON(&reqBody); err != nil { //haha looks like a dick :)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
