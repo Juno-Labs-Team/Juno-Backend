@@ -19,10 +19,13 @@ type Config struct {
 }
 
 func Load() *Config {
-	godotenv.Load()
+	// Only load .env in development
+	if os.Getenv("GIN_MODE") != "release" {
+		godotenv.Load()
+	}
 
 	return &Config{
-		Port:               getEnv("PORT", "3000"),
+		Port:               getEnv("PORT", "8080"),
 		JWTSecret:          os.Getenv("JWT_SECRET"),
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
