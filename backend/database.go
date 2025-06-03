@@ -25,7 +25,8 @@ func InitDB() {
 		port = "5432"
 	}
 
-	// Build connection string with SSL like JS server
+	// Build connection string with SSL configuration to match Node.js
+	// Your Node.js uses: ssl: { rejectUnauthorized: false }
 	dbURL := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
 		host, port, user, password, dbname)
 
@@ -34,11 +35,16 @@ func InitDB() {
 		log.Fatal("Error connecting to database:", err)
 	}
 
+	// Set connection pool settings to match typical Node.js behavior
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+
 	if err = db.Ping(); err != nil {
-		log.Fatal("Error connecting to database:", err)
+		log.Fatal("Error pinging database:", err)
 	}
 
-	// No output - match JS server (JS doesn't print connection message)
+	// Add success message to match Node.js output
+	log.Println("✅ Connected to PostgreSQL database")
 }
 
 func GetDB() *sql.DB {

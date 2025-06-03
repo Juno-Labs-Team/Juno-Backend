@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -19,8 +20,13 @@ import (
 var googleOauthConfig *oauth2.Config
 
 func init() {
+	// Load environment variables in init
+	if err := godotenv.Load(); err != nil {
+		// Suppress warning for now
+	}
+
 	googleOauthConfig = &oauth2.Config{
-		RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
+		RedirectURL:  "http://localhost:3000/auth/google/callback", // Add explicit redirect URL
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		Scopes:       []string{"profile", "email"},

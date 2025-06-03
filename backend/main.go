@@ -6,14 +6,10 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(); err != nil {
-		// Suppress warning for now
-	}
+	// Environment variables are already loaded in auth.go init()
 
 	// Set Gin to release mode to reduce warnings
 	gin.SetMode(gin.ReleaseMode)
@@ -32,7 +28,7 @@ func main() {
 
 	// Routes to match JS server exactly
 	setupRoutes(r)
-	
+
 	// Debug: Print registered routes
 	for _, route := range r.Routes() {
 		log.Printf("Route registered: %s %s", route.Method, route.Path)
@@ -45,6 +41,7 @@ func main() {
 
 	// Match JS server output exactly
 	log.Printf("🚀 Server running on port %s", port)
+	log.Printf("🔗 Google OAuth: http://localhost:%s/auth/google", port)
 	r.Run(":" + port)
 }
 
