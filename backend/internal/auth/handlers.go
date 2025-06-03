@@ -37,14 +37,23 @@ var (
 )
 
 func InitOAuth(cfg *configs.Config) {
+	redirectURL := "http://localhost:" + cfg.Port + "/auth/google/callback"
+
+	// For production, use the Digital Ocean URL
+	if cfg.Port == "8080" {
+		redirectURL = "https://juno-backend-6eamg.ondigitalocean.app/auth/google/callback"
+	}
+
 	googleOauthConfig = &oauth2.Config{
-		RedirectURL:  "http://localhost:" + cfg.Port + "/auth/google/callback",
+		RedirectURL:  redirectURL,
 		ClientID:     cfg.GoogleClientID,
 		ClientSecret: cfg.GoogleClientSecret,
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
 	jwtSecret = cfg.JWTSecret
+
+	log.Printf("🔗 OAuth Redirect URL: %s", redirectURL)
 }
 
 func HandleGoogleLogin(c *gin.Context) {
