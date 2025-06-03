@@ -1,4 +1,4 @@
-# Juno Rideshare 🚗s
+# Juno Rideshare 🚗
 
 should i deaduzz name ts Juno  
 [snack preview](https://snack.expo.dev/@nogambling/fascinated-orange-waffles)
