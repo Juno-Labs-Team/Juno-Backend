@@ -36,8 +36,17 @@ func SetupRoutes(r *gin.Engine, cfg *configs.Config) {
 		protected.GET("/profile", handlers.HandleGetProfile)
 		protected.PUT("/profile", handlers.HandleUpdateProfile)
 
-		// Future routes
-		// protected.GET("/friends", handlers.HandleGetFriends)
-		// protected.POST("/rides", handlers.HandleCreateRide)
+		// Friends routes
+		protected.GET("/friends", handlers.HandleGetFriends)
+		protected.GET("/friends/requests", handlers.HandleGetFriendRequests)
+		protected.POST("/friends/request/:friendId", handlers.HandleSendFriendRequest)
+		protected.POST("/friends/accept/:friendshipId", handlers.HandleAcceptFriendRequest)
+		protected.GET("/users/search", handlers.HandleSearchUsers)
+
+		// Ride routes
+		protected.GET("/rides", handlers.HandleGetRides)
+		protected.POST("/rides", handlers.HandleCreateRide)
+		protected.POST("/rides/:rideId/join", handlers.HandleJoinRide)
+		protected.PUT("/ride-requests/:requestId", handlers.HandleUpdateRideRequest)
 	}
 }

@@ -21,4 +21,40 @@ type Ride struct {
 	Status               string    `json:"status" db:"status"`
 	CreatedAt            time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt            time.Time `json:"updatedAt" db:"updated_at"`
+
+	// Additional fields for API responses
+	DriverName     string `json:"driverName"`
+	DriverEmail    string `json:"driverEmail"`
+	AvailableSpots int    `json:"availableSpots"`
+	IsDriver       bool   `json:"isDriver"`
+	IsPassenger    bool   `json:"isPassenger"`
+}
+
+type CreateRideRequest struct {
+	Title                string    `json:"title" binding:"required"`
+	Description          string    `json:"description"`
+	PickupLocation       string    `json:"pickupLocation" binding:"required"`
+	PickupLatitude       float64   `json:"pickupLatitude"`
+	PickupLongitude      float64   `json:"pickupLongitude"`
+	Destination          string    `json:"destination" binding:"required"`
+	DestinationLatitude  float64   `json:"destinationLatitude"`
+	DestinationLongitude float64   `json:"destinationLongitude"`
+	DepartureTime        time.Time `json:"departureTime" binding:"required"`
+	MaxPassengers        int       `json:"maxPassengers" binding:"required,min=1,max=8"`
+	IsRecurring          bool      `json:"isRecurring"`
+	RecurrencePattern    string    `json:"recurrencePattern"`
+}
+
+type RideRequest struct {
+	ID          int       `json:"id" db:"id"`
+	RideID      int       `json:"rideId" db:"ride_id"`
+	PassengerID int       `json:"passengerId" db:"passenger_id"`
+	Status      string    `json:"status" db:"status"` // pending, accepted, declined
+	Message     string    `json:"message" db:"message"`
+	CreatedAt   time.Time `json:"createdAt" db:"created_at"`
+
+	// Additional fields for API responses
+	PassengerName  string `json:"passengerName"`
+	PassengerEmail string `json:"passengerEmail"`
+	RideTitle      string `json:"rideTitle"`
 }
