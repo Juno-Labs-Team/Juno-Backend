@@ -18,7 +18,9 @@ func HandleGetProfile(c *gin.Context) {
 	var profile models.UserProfile
 	err := database.DB.QueryRow(`
         SELECT 
-            u.id, u.username, u.email, u.first_name, u.last_name, u.phone, u.profile_picture_url,
+            u.id, u.username, u.email, u.first_name, u.last_name, 
+            COALESCE(u.phone, '') as phone, 
+            u.profile_picture_url, u.created_at, u.updated_at,
             COALESCE(up.school, '') as school,
             COALESCE(up.class_year, '') as class_year,
             COALESCE(up.major, '') as major,
@@ -32,12 +34,12 @@ func HandleGetProfile(c *gin.Context) {
         LEFT JOIN user_profiles up ON u.id = up.user_id
         WHERE u.id = $1`, userID).Scan(
 		&profile.ID, &profile.Username, &profile.Email, &profile.FirstName, &profile.LastName,
-		&profile.Phone, &profile.ProfilePicture, &profile.School, &profile.ClassYear,
-		&profile.Major, &profile.HasCar, &profile.CarMake, &profile.CarModel,
-		&profile.CarColor, &profile.MaxPassengers, &profile.Bio)
+		&profile.Phone, &profile.ProfilePicture, &profile.CreatedAt, &profile.UpdatedAt,
+		&profile.School, &profile.ClassYear, &profile.Major, &profile.HasCar,
+		&profile.CarMake, &profile.CarModel, &profile.CarColor, &profile.MaxPassengers, &profile.Bio)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch profile: " + err.Error()})
 		return
 	}
 
@@ -63,14 +65,14 @@ func HandleUpdateProfile(c *gin.Context) {
 	// Update user table (phone)
 	_, err := database.DB.Exec(`UPDATE users SET phone = $1 WHERE id = $2`, req.Phone, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user info"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user info: " + err.Error()})
 		return
 	}
 
-	// Upsert user_profiles table (we'll need to create this table)
+	// Upsert user_profiles table
 	_, err = database.DB.Exec(`
-        INSERT INTO user_profiles (user_id, school, class_year, major, has_car, car_make, car_model, car_color, max_passengers, bio)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO user_profiles (user_id, school, class_year, major, has_car, car_make, car_model, car_color, max_passengers, bio, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
         ON CONFLICT (user_id)
         DO UPDATE SET
             school = EXCLUDED.school,
@@ -87,7 +89,7 @@ func HandleUpdateProfile(c *gin.Context) {
 		req.CarMake, req.CarModel, req.CarColor, req.MaxPassengers, req.Bio)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile: " + err.Error()})
 		return
 	}
 
