@@ -48,5 +48,14 @@ func SetupRoutes(r *gin.Engine, cfg *configs.Config) {
 		protected.POST("/rides", handlers.HandleCreateRide)
 		protected.POST("/rides/:rideId/join", handlers.HandleJoinRide)
 		protected.PUT("/ride-requests/:requestId", handlers.HandleUpdateRideRequest)
+
+		// Maps & Location
+		protected.GET("/maps/geocode", handlers.HandleGeocodeAddress)
+		protected.GET("/maps/distance", handlers.HandleCalculateDistance)
+		protected.GET("/rides/nearby", handlers.HandleFindNearbyRides)
+
+		// Notifications
+		protected.GET("/notifications", handlers.HandleGetNotifications)
+		protected.PUT("/notifications/:id/read", handlers.HandleMarkNotificationRead)
 	}
 }
