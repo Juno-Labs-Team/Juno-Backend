@@ -40,3 +40,32 @@ type UpdateProfileRequest struct {
 	Bio           string `json:"bio"`
 	Phone         string `json:"phone"`
 }
+
+// Friend Models
+type Friendship struct {
+	ID        int       `json:"id" db:"id"`
+	UserID    int       `json:"userId" db:"user_id"`
+	FriendID  int       `json:"friendId" db:"friend_id"`
+	Status    string    `json:"status" db:"status"` // pending, accepted, blocked
+	CreatedAt time.Time `json:"createdAt" db:"created_at"`
+}
+
+type FriendRequest struct {
+	ID             int       `json:"id" db:"id"`
+	RequesterID    int       `json:"requesterId" db:"user_id"`
+	RequesteeID    int       `json:"requesteeId" db:"friend_id"`
+	Status         string    `json:"status" db:"status"`
+	RequesterName  string    `json:"requesterName"`
+	RequesteeEmail string    `json:"requesteeEmail"`
+	CreatedAt      time.Time `json:"createdAt" db:"created_at"`
+}
+
+type FriendUser struct {
+	User
+	FriendshipStatus string `json:"friendshipStatus"`
+	School           string `json:"school"`
+	ClassYear        string `json:"classYear"`
+	HasCar           bool   `json:"hasCar"`
+	CarMake          string `json:"carMake"`
+	CarModel         string `json:"carModel"`
+}
