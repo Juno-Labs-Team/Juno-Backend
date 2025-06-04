@@ -28,12 +28,16 @@ func SetupRoutes(r *gin.Engine, cfg *configs.Config) {
 		authGroup.POST("/logout", auth.HandleLogout)
 	}
 
-	// Protected routes (profile routes coming next)
+	// Protected routes
 	protected := r.Group("/api")
 	protected.Use(auth.JWTAuthMiddleware())
 	{
-		// Profile routes (we'll add these in step 2)
-		// protected.GET("/profile", handlers.HandleGetProfile)
-		// protected.PUT("/profile", handlers.HandleUpdateProfile)
+		// Profile routes
+		protected.GET("/profile", handlers.HandleGetProfile)
+		protected.PUT("/profile", handlers.HandleUpdateProfile)
+
+		// Future routes
+		// protected.GET("/friends", handlers.HandleGetFriends)
+		// protected.POST("/rides", handlers.HandleCreateRide)
 	}
 }
