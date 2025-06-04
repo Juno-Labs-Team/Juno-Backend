@@ -54,6 +54,24 @@ CREATE TABLE ride_participants (
   UNIQUE(ride_id, user_id)
 );
 
+-- Add user_profiles table for extended profile information
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    school VARCHAR(255),
+    class_year VARCHAR(50), -- Freshman, Sophomore, Junior, Senior, Graduate
+    major VARCHAR(255),
+    has_car BOOLEAN DEFAULT FALSE,
+    car_make VARCHAR(100),
+    car_model VARCHAR(100),
+    car_color VARCHAR(50),
+    max_passengers INTEGER DEFAULT 0,
+    bio TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id)
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_friendships_user_id ON friendships(user_id);
 CREATE INDEX idx_friendships_friend_id ON friendships(friend_id);
@@ -61,3 +79,8 @@ CREATE INDEX idx_rides_driver_id ON rides(driver_id);
 CREATE INDEX idx_rides_departure_time ON rides(departure_time);
 CREATE INDEX idx_ride_participants_ride_id ON ride_participants(ride_id);
 CREATE INDEX idx_ride_participants_user_id ON ride_participants(user_id);
+-- Add index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
+
+-- Add phone column to users table if it doesn't exist (for profile updates)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20);
