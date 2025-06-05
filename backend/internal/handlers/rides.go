@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"juno-backend/internal/database"
-	"juno-backend/internal/models"
 	"net/http"
 	"strconv"
 
@@ -17,43 +16,34 @@ func HandleCreateRide(c *gin.Context) {
 		return
 	}
 
-	var req models.CreateRideRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+	var rideData struct {
+		Origin         string  `json:"origin" binding:"required"`
+		Destination    string  `json:"destination" binding:"required"`
+		DepartureTime  string  `json:"departureTime" binding:"required"`
+		AvailableSeats int     `json:"availableSeats" binding:"required"`
+		Price          float64 `json:"price"`
+		Notes          string  `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&rideData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Verify user has car info in profile
-	var hasCar bool
-	err := database.DB.QueryRow(`
-		SELECT COALESCE(has_car, false) 
-		FROM user_profiles 
-		WHERE user_id = $1`, userID).Scan(&hasCar)
-
-	if err != nil || !hasCar {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Driver must have car information in profile"})
-		return
-	}
-
-	// Create the ride
 	var rideID int
-	err = database.DB.QueryRow(`
-		INSERT INTO rides (
-			driver_id, title, description, pickup_location, pickup_latitude, pickup_longitude,
-			destination, destination_latitude, destination_longitude, departure_time, 
-			max_passengers, is_recurring, recurrence_pattern, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active')
+	err := database.DB.QueryRow(`
+		INSERT INTO rides (driver_id, origin, destination, departure_time, available_seats, price, notes, status) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'active') 
 		RETURNING id`,
-		userID, req.Title, req.Description, req.PickupLocation, req.PickupLatitude, req.PickupLongitude,
-		req.Destination, req.DestinationLatitude, req.DestinationLongitude, req.DepartureTime,
-		req.MaxPassengers, req.IsRecurring, req.RecurrencePattern).Scan(&rideID)
+		userID, rideData.Origin, rideData.Destination, rideData.DepartureTime,
+		rideData.AvailableSeats, rideData.Price, rideData.Notes).Scan(&rideID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create ride: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create ride"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"message": "Ride created successfully",
 		"rideId":  rideID,
 	})
@@ -67,58 +57,47 @@ func HandleGetRides(c *gin.Context) {
 		return
 	}
 
+	// Use userID to get user's rides
 	rows, err := database.DB.Query(`
-		SELECT 
-			r.id, r.driver_id, r.title, r.description, r.pickup_location, 
-			r.destination, r.departure_time, r.max_passengers, r.current_passengers,
-			r.status, r.created_at,
-			u.first_name, u.last_name, u.email,
-			(r.max_passengers - r.current_passengers) as available_spots,
-			(r.driver_id = $1) as is_driver,
-			CASE WHEN rr.id IS NOT NULL THEN true ELSE false END as is_passenger
-		FROM rides r
-		JOIN users u ON r.driver_id = u.id
-		LEFT JOIN ride_requests rr ON r.id = rr.ride_id AND rr.passenger_id = $1 AND rr.status = 'accepted'
-		WHERE r.status = 'active' 
-		AND r.departure_time > NOW()
-		AND (
-			r.driver_id = $1 OR  -- User's own rides
-			r.driver_id IN (     -- Friends' rides
-				SELECT CASE 
-					WHEN f.user_id = $1 THEN f.friend_id 
-					ELSE f.user_id 
-				END
-				FROM friendships f 
-				WHERE (f.user_id = $1 OR f.friend_id = $1) 
-				AND f.status = 'accepted'
-			)
+		SELECT id, driver_id, origin, destination, departure_time, available_seats, status 
+		FROM rides 
+		WHERE driver_id = $1 OR id IN (
+			SELECT ride_id FROM ride_participants WHERE user_id = $1
 		)
-		ORDER BY r.departure_time ASC`,
-		userID)
+		ORDER BY departure_time ASC
+	`, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rides: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rides"})
 		return
 	}
 	defer rows.Close()
 
-	var rides []models.Ride
+	var rides []map[string]interface{}
 	for rows.Next() {
-		var ride models.Ride
-		err := rows.Scan(
-			&ride.ID, &ride.DriverID, &ride.Title, &ride.Description, &ride.PickupLocation,
-			&ride.Destination, &ride.DepartureTime, &ride.MaxPassengers, &ride.CurrentPassengers,
-			&ride.Status, &ride.CreatedAt, &ride.DriverName, &ride.DriverName, &ride.DriverEmail,
-			&ride.AvailableSpots, &ride.IsDriver, &ride.IsPassenger)
+		var ride map[string]interface{} = make(map[string]interface{})
+		var id, driverID, availableSeats int
+		var origin, destination, status string
+		var departureTime string
 
+		err := rows.Scan(&id, &driverID, &origin, &destination, &departureTime, &availableSeats, &status)
 		if err != nil {
 			continue
 		}
+
+		ride["id"] = id
+		ride["driverId"] = driverID
+		ride["origin"] = origin
+		ride["destination"] = destination
+		ride["departureTime"] = departureTime
+		ride["availableSeats"] = availableSeats
+		ride["status"] = status
+
 		rides = append(rides, ride)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Rides fetched successfully",
+		"message": "Rides retrieved successfully",
 		"rides":   rides,
 	})
 }
@@ -131,62 +110,59 @@ func HandleJoinRide(c *gin.Context) {
 		return
 	}
 
-	rideID, err := strconv.Atoi(c.Param("rideId"))
+	rideIDStr := c.Param("rideId")
+	rideID, err := strconv.Atoi(rideIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ride ID"})
 		return
 	}
 
-	var req struct {
-		Message string `json:"message"`
-	}
-	c.ShouldBindJSON(&req)
-
-	// Check if ride exists and has space
-	var driverID, maxPassengers, currentPassengers int
-	err = database.DB.QueryRow(`
-		SELECT driver_id, max_passengers, current_passengers 
-		FROM rides 
-		WHERE id = $1 AND status = 'active'`, rideID).Scan(&driverID, &maxPassengers, &currentPassengers)
-
+	// Check if ride exists and has available seats
+	var availableSeats int
+	var driverID int
+	err = database.DB.QueryRow("SELECT available_seats, driver_id FROM rides WHERE id = $1 AND status = 'active'", rideID).Scan(&availableSeats, &driverID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Ride not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ride not found or inactive"})
 		return
 	}
 
-	if driverID == userID {
+	// Check if user is the driver
+	if driverID == userID.(int) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot join your own ride"})
 		return
 	}
 
-	if currentPassengers >= maxPassengers {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Ride is full"})
-		return
-	}
-
-	// Check if already requested
+	// Check if user already joined
 	var existingID int
-	err = database.DB.QueryRow(`
-		SELECT id FROM ride_requests 
-		WHERE ride_id = $1 AND passenger_id = $2`, rideID, userID).Scan(&existingID)
-
+	err = database.DB.QueryRow("SELECT id FROM ride_participants WHERE ride_id = $1 AND user_id = $2", rideID, userID).Scan(&existingID)
 	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Already requested to join this ride"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Already joined this ride"})
 		return
 	}
 
-	// Create ride request
-	_, err = database.DB.Exec(`
-	INSERT INTO ride_requests (ride_id, passenger_id, message, status) 
-	VALUES ($1, $2, $3, 'pending')`,
-		rideID, userID, req.Message)
+	if availableSeats <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No available seats"})
+		return
+	}
 
+	// Add user to ride
+	_, err = database.DB.Exec("INSERT INTO ride_participants (ride_id, user_id, status) VALUES ($1, $2, 'confirmed')", rideID, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to request ride"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to join ride"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Ride request sent successfully"})
+	// Update available seats
+	_, err = database.DB.Exec("UPDATE rides SET available_seats = available_seats - 1 WHERE id = $1", rideID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update ride"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully joined ride",
+		"rideId":  rideID,
+	})
 }
 
 // Accept/decline ride request (for drivers)
@@ -255,5 +231,64 @@ func HandleUpdateRideRequest(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Ride request " + req.Status + " successfully",
+	})
+}
+
+// Get nearby rides
+func HandleGetNearbyRides(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get rides that user hasn't joined and isn't driving
+	rows, err := database.DB.Query(`
+		SELECT r.id, r.driver_id, r.origin, r.destination, r.departure_time, r.available_seats, r.price, u.username 
+		FROM rides r
+		JOIN users u ON r.driver_id = u.id
+		WHERE r.status = 'active' 
+		AND r.available_seats > 0 
+		AND r.driver_id != $1
+		AND r.id NOT IN (
+			SELECT ride_id FROM ride_participants WHERE user_id = $1
+		)
+		ORDER BY r.departure_time ASC
+		LIMIT 20
+	`, userID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch nearby rides"})
+		return
+	}
+	defer rows.Close()
+
+	var rides []map[string]interface{}
+	for rows.Next() {
+		var ride map[string]interface{} = make(map[string]interface{})
+		var id, driverID, availableSeats int
+		var origin, destination, departureTime, driverUsername string
+		var price float64
+
+		err := rows.Scan(&id, &driverID, &origin, &destination, &departureTime, &availableSeats, &price, &driverUsername)
+		if err != nil {
+			continue
+		}
+
+		ride["id"] = id
+		ride["driverId"] = driverID
+		ride["driverUsername"] = driverUsername
+		ride["origin"] = origin
+		ride["destination"] = destination
+		ride["departureTime"] = departureTime
+		ride["availableSeats"] = availableSeats
+		ride["price"] = price
+
+		rides = append(rides, ride)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Nearby rides retrieved successfully",
+		"rides":   rides,
 	})
 }
