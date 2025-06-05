@@ -38,11 +38,11 @@ class ApiService {
 
   // Profile Management
   async getProfile() {
-    return this.makeRequest('/profile');
+    return this.makeRequest('/api/profile'); // Add /api prefix
   }
 
   async updateProfile(profileData) {
-    return this.makeRequest('/profile', {
+    return this.makeRequest('/api/profile', { // Add /api prefix
       method: 'PUT',
       body: JSON.stringify(profileData),
     });
@@ -50,37 +50,33 @@ class ApiService {
 
   // Ride Management
   async getRides() {
-    return this.makeRequest('/rides');
+    return this.makeRequest('/api/rides'); // Add /api prefix
   }
 
   async createRide(rideData) {
-    return this.makeRequest('/rides', {
+    return this.makeRequest('/api/rides', { // Add /api prefix
       method: 'POST',
       body: JSON.stringify(rideData),
     });
   }
 
-  async searchNearbyRides(lat, lng, radius = 10) {
-    return this.makeRequest(`/rides/nearby?pickup_lat=${lat}&pickup_lng=${lng}&radius=${radius}`);
-  }
-
   async joinRide(rideId) {
-    return this.makeRequest(`/rides/${rideId}/join`, {
+    return this.makeRequest(`/api/rides/${rideId}/join`, { // Add /api prefix
       method: 'POST',
     });
   }
 
   // Friends Management
   async searchUsers(query) {
-    return this.makeRequest(`/users/search?q=${encodeURIComponent(query)}`);
+    return this.makeRequest(`/api/users/search?q=${encodeURIComponent(query)}`); // Add /api prefix
   }
 
   async getFriends() {
-    return this.makeRequest('/friends');
+    return this.makeRequest('/api/friends'); // Add /api prefix
   }
 
   async sendFriendRequest(userId) {
-    return this.makeRequest(`/friends/request/${userId}`, {
+    return this.makeRequest(`/api/friends/request/${userId}`, { // Add /api prefix
       method: 'POST',
     });
   }
