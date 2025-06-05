@@ -1,42 +1,48 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
   Alert,
   ActivityIndicator,
-  TextInput,
-  Linking
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import authService from '../services/auth';
+import authService from '../services/auth'; // Updated import
 
-const LoginScreen = ({ onAuthSuccess }) => {
-  const [loading, setLoading] = useState(false);
+const LoginScreen = ({ onAuthSuccess, onSwitchToSignUp }) => {
   const [token, setToken] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
     Alert.alert(
       'Google Login',
-      'This will open your browser to login with Google.',
+      'This will open your browser to login with Google. After logging in, you\'ll be redirected back to the app.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Continue',
           onPress: async () => {
+            setLoading(true);
             try {
-              // Open the Google OAuth URL in browser
-              const authUrl = 'https://juno-backend-6eamg.ondigitalocean.app/auth/google';
-              await Linking.openURL(authUrl);
+              const result = await authService.loginWithGoogle();
               
-              Alert.alert(
-                'Copy Your Token',
-                'After logging in, copy the JWT token from the response and paste it below.',
-                [{ text: 'OK' }]
-              );
+              if (result.success) {
+                Alert.alert('Welcome!', `Hello ${result.user.firstName || result.user.username}!`);
+                onAuthSuccess(result.user);
+              } else {
+                Alert.alert('Login Failed', result.error);
+                // Show manual token input as fallback
+                Alert.alert(
+                  'Alternative Login',
+                  'Google OAuth had issues. You can manually copy your token from the browser response and paste it below.',
+                  [{ text: 'OK' }]
+                );
+              }
             } catch (error) {
-              Alert.alert('Error', 'Could not open browser');
+              Alert.alert('Error', 'Login failed: ' + error.message);
+            } finally {
+              setLoading(false);
             }
           }
         }
@@ -55,7 +61,7 @@ const LoginScreen = ({ onAuthSuccess }) => {
       const result = await authService.loginWithToken(token.trim());
       
       if (result.success) {
-        Alert.alert('Welcome!', `Hello ${result.user.firstName}!`);
+        Alert.alert('Welcome!', `Hello ${result.user.firstName || result.user.username}!`);
         onAuthSuccess(result.user);
       } else {
         Alert.alert('Login Failed', result.error);
@@ -72,16 +78,20 @@ const LoginScreen = ({ onAuthSuccess }) => {
       <View style={styles.header}>
         <Text style={styles.logo}>🚗</Text>
         <Text style={styles.title}>Juno</Text>
-        <Text style={styles.subtitle}>Student rideshare made simple</Text>
+        <Text style={styles.subtitle}>Your rideshare companion</Text>
       </View>
 
-      <View style={styles.loginContainer}>
+      <View style={styles.loginSection}>
         <TouchableOpacity 
-          style={styles.googleButton}
+          style={styles.googleButton} 
           onPress={handleGoogleLogin}
+          disabled={loading}
         >
-          <Ionicons name="logo-google" size={20} color="#FFFFFF" />
-          <Text style={styles.googleButtonText}>Login with Google</Text>
+          {loading ? (
+            <ActivityIndicator color="#4285F4" />
+          ) : (
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.divider}>
@@ -90,11 +100,10 @@ const LoginScreen = ({ onAuthSuccess }) => {
           <View style={styles.dividerLine} />
         </View>
 
-        <Text style={styles.label}>Paste JWT Token:</Text>
+        <Text style={styles.tokenLabel}>Manual Token Login (Development)</Text>
         <TextInput
           style={styles.tokenInput}
           placeholder="Paste your JWT token here..."
-          placeholderTextColor="#666"
           value={token}
           onChangeText={setToken}
           multiline
@@ -113,6 +122,17 @@ const LoginScreen = ({ onAuthSuccess }) => {
             <Text style={styles.loginButtonText}>Login with Token</Text>
           )}
         </TouchableOpacity>
+
+        {onSwitchToSignUp && (
+          <TouchableOpacity
+            style={styles.switchButton}
+            onPress={onSwitchToSignUp}
+          >
+            <Text style={styles.switchButtonText}>
+              Don't have an account? <Text style={styles.linkText}>Sign Up</Text>
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.footer}>
@@ -144,37 +164,36 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,
-    color: '#AAAAAA',
+    color: '#B0B0B0',
     textAlign: 'center',
-    lineHeight: 24,
   },
-  loginContainer: {
+  loginSection: {
     paddingHorizontal: 40,
-    paddingBottom: 40,
+    paddingBottom: 60,
   },
   googleButton: {
-    flexDirection: 'row',
-    backgroundColor: '#4285F4',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 16,
-    borderRadius: 25,
-    alignItems: 'center',
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 20,
-    shadowColor: "#000",
+    elevation: 2,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
   },
   googleButtonText: {
-    color: '#FFFFFF',
+    color: '#1F1F1F',
     fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 10,
+    fontWeight: '600',
   },
   divider: {
     flexDirection: 'row',
@@ -184,55 +203,62 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#333',
+    backgroundColor: '#333333',
   },
   dividerText: {
-    color: '#666',
-    paddingHorizontal: 15,
+    color: '#B0B0B0',
+    paddingHorizontal: 16,
     fontSize: 14,
   },
-  label: {
-    color: '#FFFFFF',
+  tokenLabel: {
+    color: '#B0B0B0',
     fontSize: 14,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   tokenInput: {
     backgroundColor: '#1E1E1E',
     color: '#FFFFFF',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 14,
-    marginBottom: 15,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
     minHeight: 80,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#333333',
   },
   loginButton: {
     backgroundColor: '#4CAF50',
     paddingVertical: 16,
-    borderRadius: 25,
+    borderRadius: 8,
     alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 16,
   },
   loginButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+  },
+  switchButton: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  switchButtonText: {
+    color: '#B0B0B0',
+    fontSize: 14,
+  },
+  linkText: {
+    color: '#4CAF50',
+    fontWeight: '600',
   },
   footer: {
     paddingHorizontal: 40,
     paddingBottom: 40,
+    alignItems: 'center',
   },
   footerText: {
-    color: '#666',
+    color: '#666666',
     fontSize: 12,
     textAlign: 'center',
-    lineHeight: 16,
   },
 });
 
