@@ -8,7 +8,7 @@ WebBrowser.maybeCompleteAuthSession();
 const TOKEN_KEY = 'juno_auth_token';
 const USER_KEY = 'juno_user_data';
 
-const BACKEND_AUTH_URL = 'https://juno-backend-6eamg.ondigitalocean.app/auth/google';
+const BACKEND_AUTH_URL = 'http://localhost:8080/auth/google'; // Update for local development
 
 class AuthService {
   constructor() {
@@ -24,31 +24,101 @@ class AuthService {
     }
   }
 
-  // Google OAuth Login
+  // Google OAuth Login - Updated for web and mobile
   async loginWithGoogle() {
     try {
       console.log('Starting Google OAuth...');
       
-      // Open browser to your backend's Google OAuth endpoint
-      const result = await WebBrowser.openAuthSessionAsync(
-        BACKEND_AUTH_URL,
-        'exp://127.0.0.1:8081' // Expo redirect scheme
-      );
-
-      if (result.type === 'success') {
-        // Extract token from the result URL if your backend redirects with it
-        // For now, we'll use a different approach since your backend redirects to JSON
-        console.log('OAuth result:', result);
-        
-        // For production OAuth, you might need to modify your backend to handle mobile redirects
-        // For now, let's implement a workaround
-        return await this.handleOAuthCallback(result.url);
+      // Check if we're on web or mobile
+      if (typeof window !== 'undefined' && window.opener !== undefined) {
+        // Web platform - use popup
+        return this.loginWithGoogleWeb();
       } else {
-        return { success: false, error: 'OAuth cancelled' };
+        // Mobile platform - use WebBrowser
+        return this.loginWithGoogleMobile();
       }
     } catch (error) {
       console.error('OAuth error:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  async loginWithGoogleWeb() {
+    return new Promise((resolve, reject) => {
+      const popup = window.open(
+        BACKEND_AUTH_URL,
+        'googleAuth',
+        'width=500,height=600,scrollbars=yes,resizable=yes'
+      );
+
+      if (!popup) {
+        reject(new Error('Popup blocked. Please allow popups for this site.'));
+        return;
+      }
+
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          reject(new Error('Authentication cancelled'));
+        }
+      }, 1000);
+
+      const handleMessage = (event) => {
+        if (event.origin !== 'http://localhost:8080') return;
+        
+        clearInterval(checkClosed);
+        popup.close();
+        window.removeEventListener('message', handleMessage);
+
+        if (event.data.success) {
+          this.saveAuthData(event.data.token, event.data.user).then(() => {
+            resolve({ success: true, user: event.data.user });
+          });
+        } else {
+          reject(new Error(event.data.error || 'Authentication failed'));
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+    });
+  }
+
+  async loginWithGoogleMobile() {
+    const result = await WebBrowser.openAuthSessionAsync(
+      BACKEND_AUTH_URL,
+      'exp://127.0.0.1:8081'
+    );
+
+    if (result.type === 'success') {
+      console.log('OAuth result:', result);
+      return await this.handleOAuthCallback(result.url);
+    } else {
+      return { success: false, error: 'OAuth cancelled' };
+    }
+  }
+
+  // Sign up method
+  async signUp(userData) {
+    try {
+      const response = await fetch('http://localhost:8080/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await this.saveAuthData(data.token, data.user);
+        return { success: true, user: data.user };
+      } else {
+        return { success: false, error: data.error || 'Sign up failed' };
+      }
+    } catch (error) {
+      console.error('Sign up error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
     }
   }
 
@@ -71,10 +141,36 @@ class AuthService {
   }
 
   async handleOAuthCallback(url) {
-    // This would parse the callback URL for tokens
-    // Implementation depends on how your backend handles mobile redirects
-    console.log('Handling OAuth callback:', url);
-    return { success: false, error: 'OAuth callback handling not implemented' };
+    try {
+      // For mobile, we might need to extract token from URL or make additional API call
+      console.log('Handling OAuth callback:', url);
+      
+      // If your backend redirects with token in URL
+      const urlParams = new URLSearchParams(url.split('?')[1]);
+      const token = urlParams.get('token');
+      
+      if (token) {
+        const user = await this.getUserFromToken(token);
+        await this.saveAuthData(token, user);
+        return { success: true, user };
+      }
+      
+      return { success: false, error: 'No token received from OAuth' };
+    } catch (error) {
+      console.error('OAuth callback error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getUserFromToken(token) {
+    try {
+      apiService.setAuthToken(token);
+      const response = await apiService.getProfile();
+      return response.profile || response.user;
+    } catch (error) {
+      console.error('Error getting user from token:', error);
+      throw error;
+    }
   }
 
   async saveAuthData(token, user) {
