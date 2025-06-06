@@ -7,9 +7,15 @@ const API_BASE_URL = __DEV__
 class ApiClient {
   constructor() {
     this.baseURL = API_BASE_URL;
+    this.authToken = null;
+  }
+
+  setAuthToken(token) {
+    this.authToken = token;
   }
 
   async getAuthToken() {
+    if (this.authToken) return this.authToken;
     return await AsyncStorage.getItem('authToken');
   }
 
@@ -25,14 +31,19 @@ class ApiClient {
       ...options,
     };
 
-    const response = await fetch(`${this.baseURL}${endpoint}`, config);
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'API request failed');
-    }
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, config);
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Network error' }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
 
-    return response.json();
+      return response.json();
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      throw error;
+    }
   }
 
   // Auth methods
@@ -43,7 +54,6 @@ class ApiClient {
   }
 
   async logout() {
-    await AsyncStorage.removeItem('authToken');
     return this.request('/auth/logout', { method: 'POST' });
   }
 
