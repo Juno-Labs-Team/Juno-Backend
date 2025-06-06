@@ -65,27 +65,112 @@ func HandleGoogleLogin(c *gin.Context) {
 func HandleGoogleCallback(c *gin.Context) {
 	code := c.Query("code")
 	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Code not found"})
+		// Redirect to frontend with error
+		c.HTML(http.StatusBadRequest, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Login Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Login Error</h2>
+						<p>Authorization code not found. Please try again.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
 		return
 	}
 
 	token, err := googleOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange token"})
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Login Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Login Error</h2>
+						<p>Failed to exchange authorization code. Please try again.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
 		return
 	}
 
 	client := googleOauthConfig.Client(context.Background(), token)
 	userInfoResp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Login Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Login Error</h2>
+						<p>Failed to get user information. Please try again.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
 		return
 	}
 	defer userInfoResp.Body.Close()
 
 	var googleUser GoogleUserInfo
 	if err := json.NewDecoder(userInfoResp.Body).Decode(&googleUser); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode user info"})
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Login Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Login Error</h2>
+						<p>Failed to decode user information. Please try again.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
 		return
 	}
 
@@ -120,7 +205,28 @@ func HandleGoogleCallback(c *gin.Context) {
 
 		if err != nil {
 			log.Printf("Error creating user: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			c.HTML(http.StatusInternalServerError, "", `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Juno - Login Error</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+                        .container { max-width: 600px; margin: 0 auto; }
+                        .error { color: #ff6b6b; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>🚗 Juno</h1>
+                        <div class="error">
+                            <h2>Login Error</h2>
+                            <p>Failed to create user account. Please try again.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `)
 			return
 		}
 
@@ -139,23 +245,165 @@ func HandleGoogleCallback(c *gin.Context) {
 
 	tokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(jwtSecret))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		c.HTML(http.StatusInternalServerError, "", `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Juno - Login Error</title>
+                <style>
+                    body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+                    .container { max-width: 600px; margin: 0 auto; }
+                    .error { color: #ff6b6b; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🚗 Juno</h1>
+                    <div class="error">
+                        <h2>Login Error</h2>
+                        <p>Failed to generate authentication token. Please try again.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `)
 		return
 	}
 
-	// For mobile apps, redirect to a custom scheme or deep link
-	// For now, return JSON response with token
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Login successful",
-		"token":   tokenString,
-		"user": gin.H{
-			"id":       userID,
-			"username": username,
-			"email":    googleUser.Email,
-			"firstName": googleUser.Given,
-			"lastName":  googleUser.Family,
-		},
-	})
+	// Return success page with token that user can copy
+	c.HTML(http.StatusOK, "", fmt.Sprintf(`
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<title>Juno - Login Successful</title>
+			<style>
+				body { 
+					font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+					background: linear-gradient(135deg, #0a0c1e 0%%, #1a1a30 100%%); 
+					color: white; 
+					text-align: center; 
+					padding: 20px;
+					margin: 0;
+					min-height: 100vh;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				}
+				.container { 
+					max-width: 700px; 
+					margin: 0 auto;
+					background: rgba(24, 24, 37, 0.8);
+					border-radius: 20px;
+					padding: 40px;
+					border: 2px solid #00ffe744;
+					box-shadow: 0 8px 32px rgba(0, 255, 231, 0.2);
+				}
+				.success { color: #00ffe7; }
+				.logo { font-size: 48px; margin-bottom: 20px; }
+				h1 { color: #00ffe7; text-shadow: 0 0 10px #00ffe7; }
+				.token-container {
+					background: #1e1e1e;
+					border: 2px solid #00ffe7;
+					border-radius: 15px;
+					padding: 20px;
+					margin: 20px 0;
+					word-break: break-all;
+					font-family: monospace;
+					font-size: 14px;
+					line-height: 1.5;
+				}
+				.copy-btn {
+					background: #00ffe7;
+					color: #000;
+					border: none;
+					padding: 12px 25px;
+					border-radius: 25px;
+					font-weight: bold;
+					cursor: pointer;
+					margin: 10px;
+					font-size: 16px;
+					transition: all 0.3s ease;
+				}
+				.copy-btn:hover {
+					background: #00d4c4;
+					box-shadow: 0 4px 15px rgba(0, 255, 231, 0.4);
+				}
+				.instructions {
+					background: rgba(0, 255, 231, 0.1);
+					border-radius: 15px;
+					padding: 20px;
+					margin: 20px 0;
+					text-align: left;
+				}
+				.step {
+					margin: 10px 0;
+					padding-left: 20px;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="container">
+				<div class="logo">🚗</div>
+				<h1>Juno Login Successful!</h1>
+				<div class="success">
+					<p><strong>Welcome, %s!</strong></p>
+					<p>Copy the token below and paste it in the Juno app:</p>
+				</div>
+				
+				<div class="token-container" id="token">%s</div>
+				
+				<button class="copy-btn" onclick="copyToken()">📋 Copy Token</button>
+				
+				<div class="instructions">
+					<h3>📱 Next Steps:</h3>
+					<div class="step">1. Go back to the Juno app</div>
+					<div class="step">2. Enable "Dev Mode" on the login screen</div>
+					<div class="step">3. Paste the token in the text field</div>
+					<div class="step">4. Click "Dev Login"</div>
+				</div>
+				
+				<p style="color: #666; font-size: 12px; margin-top: 30px;">
+					You can close this tab after copying the token.
+				</p>
+			</div>
+			
+			<script>
+				function copyToken() {
+					const tokenElement = document.getElementById('token');
+					const token = tokenElement.textContent;
+					
+					navigator.clipboard.writeText(token).then(function() {
+						const btn = document.querySelector('.copy-btn');
+						btn.textContent = '✅ Copied!';
+						btn.style.background = '#4CAF50';
+						
+						setTimeout(function() {
+							btn.textContent = '📋 Copy Token';
+							btn.style.background = '#00ffe7';
+						}, 2000);
+					}, function() {
+						// Fallback for older browsers
+						tokenElement.select();
+						document.execCommand('copy');
+						alert('Token copied to clipboard!');
+					});
+				}
+				
+				// Auto-select token on page load for easy copying
+				window.onload = function() {
+					const tokenElement = document.getElementById('token');
+					if (window.getSelection) {
+						const selection = window.getSelection();
+						const range = document.createRange();
+						range.selectNodeContents(tokenElement);
+						selection.removeAllRanges();
+						selection.addRange(range);
+					}
+				};
+			</script>
+		</body>
+		</html>
+	`, googleUser.Given, tokenString))
 }
 
 func HandleLogout(c *gin.Context) {
