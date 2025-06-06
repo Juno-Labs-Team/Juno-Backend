@@ -77,24 +77,31 @@ export const AuthProvider = ({ children }) => {
         window.open(authUrl, '_blank');
         return { 
           success: false, 
-          message: 'Please copy the JWT token from the new tab and paste it in the login form.' 
+          message: 'A new tab has opened. Copy the JWT token from there and paste it in Dev Mode below.' 
         };
       } else {
         // For mobile
         const result = await WebBrowser.openAuthSessionAsync(authUrl, 'exp://');
         
         if (result.type === 'success') {
-          // Handle callback URL parsing here if needed
-          console.log('Auth result:', result);
           return { 
             success: false, 
-            message: 'Please copy the JWT token and paste it in the login form.' 
+            message: 'Please copy the JWT token from the browser and paste it in Dev Mode below.' 
+          };
+        } else {
+          return { 
+            success: false, 
+            message: 'Login was cancelled. Please try again or use Dev Mode with a token.' 
           };
         }
       }
     } catch (error) {
       console.error('Login failed:', error);
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.message,
+        message: 'Login failed. Please enable Dev Mode and paste your token manually.'
+      };
     }
   };
 
