@@ -18,19 +18,28 @@ class ApiClient {
   constructor() {
     this.baseURL = API_BASE_URL;
     this.authToken = null;
-    console.log('🔗 API Base URL:', this.baseURL); // Debug log
   }
 
   setAuthToken(token) {
     this.authToken = token;
-    console.log('🔑 Token set:', token ? 'Yes' : 'No'); // Debug log
   }
 
   async getAuthToken() {
-    if (this.authToken) return this.authToken;
-    const token = await AsyncStorage.getItem('authToken');
-    console.log('🔍 Retrieved token from storage:', token ? 'Yes' : 'No'); // Debug log
-    return token;
+    if (this.authToken) {
+      return this.authToken;
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        this.authToken = token;
+        return token;
+      }
+    } catch (error) {
+      console.error('Failed to get auth token:', error);
+    }
+    
+    return null;
   }
 
   async request(endpoint, options = {}) {
@@ -46,7 +55,7 @@ class ApiClient {
     };
 
     const fullUrl = `${this.baseURL}${endpoint}`;
-    console.log('🌐 Making request to:', fullUrl); // Debug log
+    console.log('🌐 Making request to:', fullUrl);
 
     try {
       const response = await fetch(fullUrl, config);
@@ -65,10 +74,10 @@ class ApiClient {
       }
 
       const result = await response.json();
-      console.log('✅ API Success:', endpoint, result); // Debug log
+      console.log('✅ API Response:', result);
       return result;
     } catch (error) {
-      console.error(`❌ API Error (${endpoint}):`, error);
+      console.error('❌ API Request failed:', error);
       throw error;
     }
   }
@@ -88,7 +97,6 @@ class ApiClient {
       return result;
     } catch (error) {
       console.log('⚠️ Logout API failed, but clearing local data anyway');
-      // Don't throw error - still clear local state
       return { success: true };
     }
   }
@@ -110,19 +118,17 @@ class ApiClient {
     return this.request('/api/friends');
   }
 
-  async getFriendRequests() {
-    return this.request('/api/friends/requests');
-  }
-
-  async sendFriendRequest(friendId) {
-    return this.request(`/api/friends/request/${friendId}`, {
+  async addFriend(userId) {
+    return this.request('/api/friends', {
       method: 'POST',
+      body: JSON.stringify({ friendId: userId }),
     });
   }
 
-  async acceptFriendRequest(friendshipId) {
-    return this.request(`/api/friends/accept/${friendshipId}`, {
+  async addFriendByUsername(username) {
+    return this.request('/api/friends/username', {
       method: 'POST',
+      body: JSON.stringify({ username }),
     });
   }
 
@@ -132,7 +138,13 @@ class ApiClient {
 
   // Rides methods
   async getRides() {
-    return this.request('/api/rides');
+    try {
+      const result = await this.request('/api/rides');
+      return result.rides || [];
+    } catch (error) {
+      console.error('Failed to get rides:', error);
+      return [];
+    }
   }
 
   async createRide(rideData) {
@@ -148,19 +160,41 @@ class ApiClient {
     });
   }
 
-  async getNearbyRides(lat, lng, radius = 10) {
-    return this.request(`/api/rides/nearby?pickup_lat=${lat}&pickup_lng=${lng}&radius=${radius}`);
-  }
-
-  // Notifications methods
-  async getNotifications() {
-    return this.request('/api/notifications');
-  }
-
-  async markNotificationRead(notificationId) {
-    return this.request(`/api/notifications/${notificationId}/read`, {
+  async leaveRide(rideId) {
+    return this.request(`/api/rides/${rideId}/leave`, {
       method: 'POST',
     });
+  }
+
+  // Upload methods
+  async uploadImage(imageUri, type = 'profile') {
+    try {
+      const formData = new FormData();
+      formData.append('image', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: `${type}.jpg`,
+      });
+
+      const token = await this.getAuthToken();
+      const response = await fetch(`${this.baseURL}/api/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Upload error:', error);
+      throw error;
+    }
   }
 }
 
