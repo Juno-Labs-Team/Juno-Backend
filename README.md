@@ -1,5 +1,7 @@
 # Juno Rideshare 🚗
 
+https://jubilant-halibut-jjjpr6gp9gjqfpq95-8081.app.github.dev/
+
 should i deaduzz name ts Juno  
 [snack preview](https://snack.expo.dev/@nogambling/fascinated-orange-waffles)
 
