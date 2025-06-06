@@ -25,15 +25,20 @@ export const AuthProvider = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       const token = await AsyncStorage.getItem('authToken');
+      console.log('🔍 Checking auth status, token exists:', !!token);
+      
       if (token) {
         // Set the token in API client
         ApiClient.setAuthToken(token);
         const profile = await ApiClient.getProfile();
+        console.log('✅ Profile loaded:', profile.profile.username);
         setUser(profile.profile);
       }
     } catch (error) {
-      console.log('Auth check failed:', error);
+      console.log('❌ Auth check failed:', error);
       await AsyncStorage.removeItem('authToken');
+      ApiClient.setAuthToken(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -41,6 +46,8 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithToken = async (token) => {
     try {
+      console.log('🔑 Logging in with token...');
+      
       // Store the token
       await AsyncStorage.setItem('authToken', token);
       
@@ -51,10 +58,12 @@ export const AuthProvider = ({ children }) => {
       const profile = await ApiClient.getProfile();
       setUser(profile.profile);
       
+      console.log('✅ Login successful:', profile.profile.username);
       return { success: true, user: profile.profile };
     } catch (error) {
-      console.error('Token login failed:', error);
+      console.error('❌ Token login failed:', error);
       await AsyncStorage.removeItem('authToken');
+      ApiClient.setAuthToken(null);
       return { success: false, error: error.message };
     }
   };
@@ -90,15 +99,35 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    console.log('🚪 Starting logout process...');
+    
     try {
-      await ApiClient.logout();
-      await AsyncStorage.removeItem('authToken');
+      // Always clear local state first (immediate logout)
       setUser(null);
+      await AsyncStorage.removeItem('authToken');
+      ApiClient.setAuthToken(null);
+      
+      console.log('✅ Local logout completed');
+      
+      // Then try API logout (but don't fail if it doesn't work)
+      try {
+        await ApiClient.logout();
+        console.log('✅ API logout successful');
+      } catch (apiError) {
+        console.log('⚠️ API logout failed, but user is already logged out locally:', apiError.message);
+      }
+      
     } catch (error) {
-      console.error('Logout failed:', error);
-      // Still clear local state even if API call fails
-      await AsyncStorage.removeItem('authToken');
+      console.error('❌ Logout error:', error);
+      
+      // Force clear everything even if there's an error
       setUser(null);
+      try {
+        await AsyncStorage.removeItem('authToken');
+        ApiClient.setAuthToken(null);
+      } catch (forceError) {
+        console.error('❌ Force logout failed:', forceError);
+      }
     }
   };
 
