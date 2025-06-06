@@ -1,156 +1,145 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
   TextInput,
+  StyleSheet,
   Alert,
   ActivityIndicator,
-  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
-const LoginScreen = () => {
-  const { login, loginWithToken } = useAuth();
-  const [token, setToken] = useState('');
+const NEON = '#00ffe7';
+
+const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
-  const [tapCount, setTapCount] = useState(0);
-  const [showQuickTest, setShowQuickTest] = useState(false);
-  const [logoAnimation] = useState(new Animated.Value(1));
+  const [devMode, setDevMode] = useState(false);
+  const [token, setToken] = useState('');
+  const { login } = useAuth();
 
   const handleGoogleLogin = async () => {
-    const result = await login();
-    if (result.message) {
-      Alert.alert('Google Login', result.message);
-    }
-  };
-
-  const handleTokenLogin = async () => {
-    if (!token.trim()) {
-      Alert.alert('Error', 'Please enter your JWT token');
-      return;
-    }
-
-    setLoading(true);
     try {
-      const result = await loginWithToken(token.trim());
-      
-      if (result.success) {
-        Alert.alert('Welcome!', `Hello ${result.user.firstName || result.user.username}!`);
-      } else {
-        Alert.alert('Login Failed', result.error);
-      }
+      setLoading(true);
+      await login();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
     } catch (error) {
-      Alert.alert('Error', 'Login failed. Please check your token.');
+      Alert.alert('Login Failed', 'Unable to sign in. Please try again.');
+      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Secret tap logo feature
-  const handleLogoTap = () => {
-    const newCount = tapCount + 1;
-    setTapCount(newCount);
-    
-    // Animate logo on tap
-    Animated.sequence([
-      Animated.timing(logoAnimation, {
-        toValue: 1.2,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(logoAnimation, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    if (newCount >= 5) {
-      setShowQuickTest(true);
-      Alert.alert('🔧 Developer Mode', 'Quick test login enabled!', [
-        { text: 'Sweet!', style: 'default' }
-      ]);
-      setTapCount(0);
+  const handleDevLogin = async () => {
+    if (!token.trim()) {
+      Alert.alert('Error', 'Please enter a token');
+      return;
     }
     
-    // Reset counter after 3 seconds of no taps
-    setTimeout(() => {
-      if (tapCount === newCount - 1) setTapCount(0);
-    }, 3000);
-  };
-
-  // Quick test with your working token
-  const quickTest = () => {
-    const workingToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJlbWFpbCI6Im9yYW5nZWp1aWNlcGx6ZGV2QGdtYWlsLmNvbSIsImV4cCI6MTc0OTg0OTEzNCwiaWF0IjoxNzQ5MjQ0MzM0fQ.lbC_Xd0k68ncr-oujzdcCqTzA2HVq2UlT2qBsFNSkCQ';
-    setToken(workingToken);
-    loginWithToken(workingToken);
+    try {
+      setLoading(true);
+      // For development - bypass normal auth
+      await login(token);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
+    } catch (error) {
+      Alert.alert('Login Failed', 'Invalid token');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        {/* Tappable Logo */}
-        <TouchableOpacity onPress={handleLogoTap} activeOpacity={0.8}>
-          <Animated.View style={{ transform: [{ scale: logoAnimation }] }}>
-            <Ionicons name="car" size={100} color="#4285F4" style={styles.icon} />
-          </Animated.View>
-        </TouchableOpacity>
+        {/* App Icon */}
+        <View style={styles.iconContainer}>
+          <Text style={styles.icon}>🚗</Text>
+          <View style={styles.iconGlow} />
+        </View>
         
-        <Text style={styles.title}>Welcome to Juno</Text>
-        <Text style={styles.subtitle}>Your rideshare companion</Text>
+        {/* Title */}
+        <Text style={styles.title}>Juno</Text>
+        <Text style={styles.subtitle}>Rideshare made simple</Text>
         
-        {/* Developer hint */}
-        {tapCount > 0 && tapCount < 5 && (
-          <Text style={styles.hintText}>
-            {5 - tapCount} more taps...
+        {/* Dev Mode Toggle */}
+        <TouchableOpacity 
+          style={styles.devToggle}
+          onPress={() => setDevMode(!devMode)}
+        >
+          <Ionicons 
+            name={devMode ? "code-slash" : "code"} 
+            size={16} 
+            color="#666" 
+          />
+          <Text style={styles.devToggleText}>
+            {devMode ? 'Exit Dev Mode' : 'Dev Mode'}
           </Text>
-        )}
-        
-        {/* Quick Test Button - Only shown after secret tap */}
-        {showQuickTest && (
+        </TouchableOpacity>
+
+        {devMode && (
           <>
-            <TouchableOpacity style={styles.devButton} onPress={quickTest}>
-              <Ionicons name="flash" size={20} color="white" />
-              <Text style={styles.devButtonText}>🔧 Dev Quick Login</Text>
+            <Text style={styles.hintText}>
+              Enter your auth token for development
+            </Text>
+            <TextInput
+              style={styles.tokenInput}
+              placeholder="Paste your auth token here..."
+              placeholderTextColor="#666"
+              value={token}
+              onChangeText={setToken}
+              multiline
+              textAlignVertical="top"
+            />
+            <TouchableOpacity
+              style={[styles.devButton, loading && { opacity: 0.6 }]}
+              onPress={handleDevLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons name="flash" size={18} color="white" />
+              )}
+              <Text style={styles.devButtonText}>
+                {loading ? 'Signing in...' : 'Dev Login'}
+              </Text>
             </TouchableOpacity>
+            
             <Text style={styles.orText}>or</Text>
           </>
         )}
-        
-        {/* Google OAuth Button */}
-        <TouchableOpacity style={styles.loginButton} onPress={handleGoogleLogin}>
-          <Ionicons name="logo-google" size={24} color="white" />
-          <Text style={styles.loginButtonText}>Sign in with Google</Text>
-        </TouchableOpacity>
 
-        <Text style={styles.orText}>or paste your token</Text>
-
-        {/* Token Input */}
-        <TextInput
-          style={styles.tokenInput}
-          placeholder="Paste JWT token here..."
-          placeholderTextColor="#666"
-          value={token}
-          onChangeText={setToken}
-          multiline
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <TouchableOpacity 
-          style={[styles.tokenButton, { opacity: token.trim() ? 1 : 0.5 }]} 
-          onPress={handleTokenLogin}
-          disabled={!token.trim() || loading}
+        {/* Google Login Button */}
+        <TouchableOpacity
+          style={[styles.loginButton, loading && { opacity: 0.6 }]}
+          onPress={handleGoogleLogin}
+          disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator size="small" color="white" />
           ) : (
-            <Text style={styles.tokenButtonText}>Login with Token</Text>
+            <Ionicons name="logo-google" size={20} color="white" />
           )}
+          <Text style={styles.loginButtonText}>
+            {loading ? 'Signing in...' : 'Continue with Google'}
+          </Text>
         </TouchableOpacity>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Students helping students carpool
+          </Text>
+          <View style={styles.footerGlow} />
+        </View>
       </View>
     </View>
   );
@@ -159,39 +148,81 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212', // Dark theme like your other screens
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#0a0c1e',
+    background: 'radial-gradient(ellipse at top, #1a1a30 70%, #0a0c1e 100%)',
   },
   content: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-    width: '100%',
+  },
+  iconContainer: {
+    position: 'relative',
+    marginBottom: 30,
   },
   icon: {
-    marginBottom: 30,
-    textShadowColor: 'rgba(66, 133, 244, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 10,
+    fontSize: 80,
+    textAlign: 'center',
+  },
+  iconGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: NEON,
+    borderRadius: 50,
+    opacity: 0.1,
+    transform: [{ scale: 1.5 }],
   },
   title: {
-    fontSize: 36,
+    fontSize: 48,
     fontWeight: 'bold',
-    color: '#fff', // White text for dark theme
+    color: '#fff',
     marginBottom: 10,
     textAlign: 'center',
+    textShadowColor: NEON,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
   },
   subtitle: {
     fontSize: 18,
-    color: '#aaa', // Light gray for subtitle
+    color: '#aaa',
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 50,
+  },
+  devToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    padding: 8,
+  },
+  devToggleText: {
+    color: '#666',
+    fontSize: 12,
+    marginLeft: 5,
+    fontStyle: 'italic',
   },
   hintText: {
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
     marginBottom: 10,
+    textAlign: 'center',
+  },
+  tokenInput: {
+    width: '100%',
+    backgroundColor: '#1e1e1e',
+    borderRadius: 10,
+    padding: 15,
+    fontSize: 14,
+    marginBottom: 15,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: '#333',
+    color: '#fff',
   },
   devButton: {
     flexDirection: 'row',
@@ -201,17 +232,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 25,
     marginBottom: 15,
-    elevation: 3,
     shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowRadius: 8,
+    elevation: 8,
   },
   devButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
-    marginLeft: 5,
+    marginLeft: 8,
   },
   orText: {
     color: '#666',
@@ -221,53 +252,43 @@ const styles = StyleSheet.create({
   loginButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4285F4',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
-    elevation: 5,
-    shadowColor: '#4285F4',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    marginBottom: 10,
+    backgroundColor: NEON,
+    paddingHorizontal: 40,
+    paddingVertical: 18,
+    borderRadius: 30,
+    shadowColor: NEON,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+    marginBottom: 40,
   },
   loginButtonText: {
-    color: 'white',
+    color: '#000',
     fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 10,
+    fontWeight: '700',
+    marginLeft: 12,
+    letterSpacing: 0.5,
   },
-  tokenInput: {
-    width: '100%',
-    backgroundColor: '#1e1e1e', // Darker input for dark theme
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 14,
-    marginBottom: 15,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    borderWidth: 1,
-    borderColor: '#333',
-    color: '#fff', // White text
-  },
-  tokenButton: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
-    width: '100%',
+  footer: {
+    position: 'relative',
     alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
-  tokenButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+  footerText: {
+    color: '#666',
+    fontSize: 14,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  footerGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -20,
+    right: -20,
+    bottom: -10,
+    backgroundColor: NEON,
+    borderRadius: 20,
+    opacity: 0.05,
   },
 });
 
