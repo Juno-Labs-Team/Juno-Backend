@@ -1,32 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  TouchableOpacity, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
   RefreshControl,
-  Alert 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ApiClient from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import apiClient from '../services/api';
 
-const HomeScreen = () => {
+const NEON = '#00ffe7';
+
+const HomeScreen = ({ navigation }) => {
+  const { user } = useAuth();
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    loadRides();
+    fetchRides();
   }, []);
 
-  const loadRides = async () => {
+  const fetchRides = async () => {
     try {
-      const response = await ApiClient.getRides();
-      setRides(response.rides || []);
+      setLoading(true);
+      const ridesData = await apiClient.getRides();
+      setRides(ridesData);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load rides');
-      console.error('Load rides error:', error);
+      console.error('Failed to fetch rides:', error);
     } finally {
       setLoading(false);
     }
@@ -34,83 +38,173 @@ const HomeScreen = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadRides();
+    await fetchRides();
     setRefreshing(false);
   };
 
-  const joinRide = async (rideId) => {
-    try {
-      await ApiClient.joinRide(rideId);
-      Alert.alert('Success', 'Successfully joined ride!');
-      loadRides(); // Refresh the list
-    } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to join ride');
-    }
+  const getComplementaryColor = (hex) => {
+    if (!hex) return NEON;
+    hex = hex.replace("#", "");
+    let r = parseInt(hex.substring(0, 2), 16);
+    let g = parseInt(hex.substring(2, 4), 16);
+    let b = parseInt(hex.substring(4, 6), 16);
+    let compR = 255 - r;
+    let compG = 255 - g;
+    let compB = 255 - b;
+    return `#${compR.toString(16).padStart(2, "0")}${compG.toString(16).padStart(2, "0")}${compB.toString(16).padStart(2, "0")}`;
   };
 
-  const renderRide = ({ item }) => (
-    <View style={styles.rideCard}>
-      <View style={styles.rideHeader}>
-        <Text style={styles.rideTitle}>{item.title || 'Untitled Ride'}</Text>
-        <Text style={styles.rideStatus}>{item.status}</Text>
-      </View>
-      
-      <View style={styles.rideDetails}>
-        <View style={styles.locationRow}>
-          <Ionicons name="location-outline" size={16} color="#666" />
-          <Text style={styles.locationText}>From: {item.origin}</Text>
-        </View>
-        <View style={styles.locationRow}>
-          <Ionicons name="location" size={16} color="#666" />
-          <Text style={styles.locationText}>To: {item.destination}</Text>
-        </View>
-        <View style={styles.locationRow}>
-          <Ionicons name="time-outline" size={16} color="#666" />
-          <Text style={styles.locationText}>
-            {new Date(item.departureTime).toLocaleString()}
-          </Text>
-        </View>
-        <View style={styles.locationRow}>
-          <Ionicons name="people-outline" size={16} color="#666" />
-          <Text style={styles.locationText}>
-            {item.availableSeats} seats available
-          </Text>
-        </View>
-      </View>
+  const getTextColor = (hex) => {
+    if (!hex) return "#FFFFFF";
+    hex = hex.replace("#", "");
+    let r = parseInt(hex.substring(0, 2), 16);
+    let g = parseInt(hex.substring(2, 4), 16);
+    let b = parseInt(hex.substring(4, 6), 16);
+    let brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+    return brightness > 130 ? "#000000" : "#FFFFFF";
+  };
 
-      {item.availableSeats > 0 && (
-        <TouchableOpacity 
-          style={styles.joinButton}
-          onPress={() => joinRide(item.id)}
-        >
-          <Text style={styles.joinButtonText}>Join Ride</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const RideCard = ({ item }) => {
+    const [expanded, setExpanded] = useState(false);
+    const animation = useState(new Animated.Value(0))[0];
 
-  if (loading) {
+    const availableSeats = (item.maxPassengers || 4) - (item.currentPassengers || 0);
+    const hasAvailableSeats = availableSeats > 0;
+    const cardColor = item.color || '4285F4';
+    const buttonColor = getComplementaryColor(cardColor);
+    const buttonTextColor = getTextColor(buttonColor);
+
+    const animatedHeight = animation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, hasAvailableSeats ? 160 : 120],
+    });
+
+    const toggleExpand = () => {
+      Animated.timing(animation, {
+        toValue: expanded ? 0 : 1,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+      setExpanded(!expanded);
+    };
+
+    const handleBookRide = () => {
+      navigation.navigate('BookRide', { rideId: item.id, rideDetails: item });
+    };
+
     return (
-      <View style={styles.centerContainer}>
-        <Text>Loading rides...</Text>
-      </View>
+      <TouchableOpacity 
+        onPress={toggleExpand} 
+        style={[
+          styles.rideCard, 
+          { 
+            backgroundColor: `#${cardColor}`,
+            shadowColor: `#${cardColor}`,
+          }
+        ]}
+        activeOpacity={0.9}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.rideTitle}>
+            {item.destination} {item.emoji || '🚗'}
+          </Text>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>
+              {hasAvailableSeats ? 'OPEN' : 'FULL'}
+            </Text>
+          </View>
+        </View>
+
+        <Animated.View style={[styles.expandedContent, { height: animatedHeight, overflow: 'hidden' }]}>
+          <View style={styles.rideDetails}>
+            <View style={styles.detailRow}>
+              <Ionicons name="calendar-outline" size={16} color="#fff" />
+              <Text style={styles.detailText}>
+                {item.date} at {item.time}
+              </Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Ionicons name="location-outline" size={16} color="#fff" />
+              <Text style={styles.detailText}>{item.origin} → {item.destination}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Ionicons name="person-outline" size={16} color="#fff" />
+              <Text style={styles.detailText}>Driver: {item.driverName}</Text>
+            </View>
+            
+            <View style={styles.detailRow}>
+              <Ionicons name="people-outline" size={16} color="#fff" />
+              <Text style={styles.detailText}>
+                {item.maxPassengers} seats ({availableSeats} available)
+              </Text>
+            </View>
+
+            {item.pricePerSeat && (
+              <View style={styles.detailRow}>
+                <Ionicons name="cash-outline" size={16} color="#fff" />
+                <Text style={styles.detailText}>${item.pricePerSeat} per seat</Text>
+              </View>
+            )}
+          </View>
+
+          {hasAvailableSeats && (
+            <TouchableOpacity 
+              style={[
+                styles.bookButton, 
+                { backgroundColor: buttonColor }
+              ]} 
+              onPress={handleBookRide}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="car-outline" size={18} color={buttonTextColor} />
+              <Text style={[styles.bookButtonText, { color: buttonTextColor }]}>
+                Book This Ride
+              </Text>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
+      </TouchableOpacity>
     );
-  }
+  };
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Upcoming Rides</Text>
+        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+          <Ionicons name="refresh" size={24} color={NEON} />
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={rides}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderRide}
+        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+        renderItem={({ item }) => <RideCard item={item} />}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={NEON}
+            colors={[NEON]}
+          />
         }
-        ListEmptyComponent={
-          <View style={styles.centerContainer}>
-            <Text style={styles.emptyText}>No rides available</Text>
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="car-outline" size={64} color="#666" />
+            <Text style={styles.emptyTitle}>No rides available</Text>
+            <Text style={styles.emptyText}>
+              Check back later for upcoming rides or create your own!
+            </Text>
+            <TouchableOpacity style={styles.createRideButton}>
+              <Ionicons name="add" size={20} color="#000" />
+              <Text style={styles.createRideText}>Create Ride</Text>
+            </TouchableOpacity>
           </View>
-        }
+        )}
       />
     </View>
   );
@@ -119,66 +213,126 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#0a0c1e',
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    textShadowColor: NEON,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   rideCard: {
-    backgroundColor: 'white',
-    margin: 10,
-    padding: 15,
-    borderRadius: 10,
-    elevation: 2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderRadius: 16,
+    marginBottom: 16,
+    padding: 20,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  rideHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
   rideTitle: {
-    fontSize: 18,
+    color: '#fff',
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    flex: 1,
   },
-  rideStatus: {
+  statusBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#fff',
     fontSize: 12,
-    color: '#4CAF50',
-    textTransform: 'uppercase',
+    fontWeight: '600',
+  },
+  expandedContent: {
+    overflow: 'hidden',
   },
   rideDetails: {
     marginBottom: 15,
   },
-  locationRow: {
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
   },
-  locationText: {
-    marginLeft: 8,
-    color: '#666',
+  detailText: {
+    color: '#fff',
     fontSize: 14,
+    marginLeft: 8,
+    opacity: 0.9,
   },
-  joinButton: {
-    backgroundColor: '#4285F4',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
+  bookButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 10,
   },
-  joinButtonText: {
-    color: 'white',
-    fontWeight: '600',
+  bookButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 20,
+    marginBottom: 10,
   },
   emptyText: {
-    fontSize: 16,
     color: '#666',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 30,
+  },
+  createRideButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: NEON,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  createRideText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
 
