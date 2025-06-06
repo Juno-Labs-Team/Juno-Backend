@@ -7,11 +7,12 @@ import {
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useColorScheme } from 'react-native';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // ✅ Correct Import
+import { Ionicons } from '@expo/vector-icons';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LoginScreen from './components/LoginScreen';
 import SearchScreen from './components/SearchScreen';
 import AddFriendScreen from './components/AddFriendScreen';
-import HomeScreen from './components/HomeScreen'; // Import HomeScreen
+import HomeScreen from './components/HomeScreen';
 import ProfileScreen from './components/Screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -24,7 +25,7 @@ const SearchStack = () => (
   </Stack.Navigator>
 );
 
-const App = () => {
+const AuthenticatedApp = () => {
   const scheme = useColorScheme();
 
   return (
@@ -45,7 +46,7 @@ const App = () => {
             if (route.name === 'Search') {
               iconName = 'search';
             } else if (route.name === 'Home') {
-              iconName = 'calendar'; // Icon for Home (calendar style)
+              iconName = 'calendar';
             } else if (route.name === 'Profile') {
               iconName = 'person';
             }
@@ -54,23 +55,29 @@ const App = () => {
         })}
       >
         <Tab.Screen name="Search" component={SearchStack} />
-        <Tab.Screen name="Home" component={HomeScreen} /> 
+        <Tab.Screen name="Home" component={HomeScreen} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
     </NavigationContainer>
   );
 };
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#121212',
-  },
-  text: {
-    color: '#FFFFFF',
-  },
-});
+const AppContent = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return null; // Or a loading screen
+  }
+
+  return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />;
+};
+
+const App = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+};
 
 export default App;
