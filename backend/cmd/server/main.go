@@ -24,7 +24,13 @@ func main() {
 
 	// CORS configuration - allow your frontend domains
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:19006", "https://yourdomain.com"},
+		AllowOrigins: []string{
+			"http://localhost:8080",    // Local backend testing
+			"http://localhost:19006",   // Expo dev server
+			"https://juno-backend-6eamg.ondigitalocean.app", // Your backend
+			"exp://*",                  // Expo mobile dev
+			"*",                        // Temporary for testing - remove in production
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: true,
