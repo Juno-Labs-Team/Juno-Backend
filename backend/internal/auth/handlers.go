@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"juno-backend/configs"
 	"juno-backend/internal/database"
 	"log"
@@ -96,6 +97,21 @@ func HandleGoogleCallback(c *gin.Context) {
 	if err != nil {
 		// User doesn't exist, create new user
 		username = strings.Split(googleUser.Email, "@")[0]
+
+		// Ensure unique username
+		originalUsername := username
+		counter := 1
+		for {
+			var existingID int
+			err := database.DB.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&existingID)
+			if err != nil {
+				// Username is available
+				break
+			}
+			username = fmt.Sprintf("%s%d", originalUsername, counter)
+			counter++
+		}
+
 		err = database.DB.QueryRow(`
             INSERT INTO users (username, email, google_id, first_name, last_name, profile_picture_url, password_hash) 
             VALUES ($1, $2, $3, $4, $5, $6, 'google_oauth') 
@@ -107,6 +123,8 @@ func HandleGoogleCallback(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
+
+		log.Printf("✅ Created new user: %s (ID: %d)", username, userID)
 	}
 
 	// Generate JWT token
@@ -125,6 +143,8 @@ func HandleGoogleCallback(c *gin.Context) {
 		return
 	}
 
+	// For mobile apps, redirect to a custom scheme or deep link
+	// For now, return JSON response with token
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
 		"token":   tokenString,
@@ -132,6 +152,8 @@ func HandleGoogleCallback(c *gin.Context) {
 			"id":       userID,
 			"username": username,
 			"email":    googleUser.Email,
+			"firstName": googleUser.Given,
+			"lastName":  googleUser.Family,
 		},
 	})
 }
