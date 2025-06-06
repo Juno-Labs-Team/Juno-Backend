@@ -1,22 +1,36 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = __DEV__ 
-  ? 'http://localhost:8080' 
-  : 'https://juno-backend-6eamg.ondigitalocean.app';
+// Fix the API URL detection
+const API_BASE_URL = (() => {
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    // Running in web development
+    return 'https://juno-backend-6eamg.ondigitalocean.app';
+  } else if (__DEV__) {
+    // Running in Expo development
+    return 'https://juno-backend-6eamg.ondigitalocean.app';
+  } else {
+    // Production build
+    return 'https://juno-backend-6eamg.ondigitalocean.app';
+  }
+})();
 
 class ApiClient {
   constructor() {
     this.baseURL = API_BASE_URL;
     this.authToken = null;
+    console.log('🔗 API Base URL:', this.baseURL); // Debug log
   }
 
   setAuthToken(token) {
     this.authToken = token;
+    console.log('🔑 Token set:', token ? 'Yes' : 'No'); // Debug log
   }
 
   async getAuthToken() {
     if (this.authToken) return this.authToken;
-    return await AsyncStorage.getItem('authToken');
+    const token = await AsyncStorage.getItem('authToken');
+    console.log('🔍 Retrieved token from storage:', token ? 'Yes' : 'No'); // Debug log
+    return token;
   }
 
   async request(endpoint, options = {}) {
@@ -31,30 +45,52 @@ class ApiClient {
       ...options,
     };
 
+    const fullUrl = `${this.baseURL}${endpoint}`;
+    console.log('🌐 Making request to:', fullUrl); // Debug log
+
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, config);
+      const response = await fetch(fullUrl, config);
       
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Network error' }));
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', errorText);
+        
+        let error;
+        try {
+          error = JSON.parse(errorText);
+        } catch {
+          error = { error: errorText || `HTTP ${response.status}` };
+        }
         throw new Error(error.error || `HTTP ${response.status}`);
       }
 
-      return response.json();
+      const result = await response.json();
+      console.log('✅ API Success:', endpoint, result); // Debug log
+      return result;
     } catch (error) {
-      console.error(`API Error (${endpoint}):`, error);
+      console.error(`❌ API Error (${endpoint}):`, error);
       throw error;
     }
   }
 
   // Auth methods
   async login() {
-    // For OAuth, redirect to backend
     const authUrl = `${this.baseURL}/auth/google`;
+    console.log('🔗 Auth URL:', authUrl);
     return authUrl;
   }
 
   async logout() {
-    return this.request('/auth/logout', { method: 'POST' });
+    console.log('🚪 Logging out...');
+    try {
+      const result = await this.request('/auth/logout', { method: 'POST' });
+      console.log('✅ Logout successful');
+      return result;
+    } catch (error) {
+      console.log('⚠️ Logout API failed, but clearing local data anyway');
+      // Don't throw error - still clear local state
+      return { success: true };
+    }
   }
 
   // Profile methods
@@ -112,8 +148,8 @@ class ApiClient {
     });
   }
 
-  async getNearbyRides() {
-    return this.request('/api/rides/nearby');
+  async getNearbyRides(lat, lng, radius = 10) {
+    return this.request(`/api/rides/nearby?pickup_lat=${lat}&pickup_lng=${lng}&radius=${radius}`);
   }
 
   // Notifications methods
