@@ -4,60 +4,108 @@ import {
   DefaultTheme,
   DarkTheme,
 } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useColorScheme } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { useColorScheme, Platform } from 'react-native';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginScreen from './components/LoginScreen';
 import SearchScreen from './components/SearchScreen';
 import AddFriendScreen from './components/AddFriendScreen';
 import HomeScreen from './components/HomeScreen';
 import ProfileScreen from './components/Screens/ProfileScreen';
+import RidesScreen from './components/RidesScreen';
+import NavigationBar from './components/NavigationBar';
 
-const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-
-const SearchStack = () => (
-  <Stack.Navigator>
-    <Stack.Screen name="Search" component={SearchScreen} />
-    <Stack.Screen name="AddFriend" component={AddFriendScreen} />
-  </Stack.Navigator>
-);
 
 const AuthenticatedApp = () => {
   const scheme = useColorScheme();
 
+  // Web-style linking configuration
+  const linking = {
+    prefixes: ['http://localhost:19006', 'https://yourapp.com'],
+    config: {
+      screens: {
+        Home: '/home',
+        Profile: '/profile', 
+        Search: '/search',
+        Rides: '/rides',
+        AddFriend: '/add-friend',
+      },
+    },
+  };
+
   return (
-    <NavigationContainer theme={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
+    <NavigationContainer 
+      theme={scheme === 'dark' ? DarkTheme : DefaultTheme}
+      linking={Platform.OS === 'web' ? linking : undefined}
+    >
+      <Stack.Navigator
+        screenOptions={{
           headerStyle: {
             backgroundColor: scheme === 'dark' ? '#121212' : '#fff',
           },
           headerTintColor: scheme === 'dark' ? '#fff' : '#000',
-          tabBarStyle: {
-            backgroundColor: scheme === 'dark' ? '#121212' : '#fff',
-          },
-          tabBarInactiveTintColor: scheme === 'dark' ? '#aaa' : '#666',
-          tabBarActiveTintColor: scheme === 'dark' ? '#fff' : '#000',
-          tabBarIcon: ({ color, size }) => {
-            let iconName;
-            if (route.name === 'Search') {
-              iconName = 'search';
-            } else if (route.name === 'Home') {
-              iconName = 'calendar';
-            } else if (route.name === 'Profile') {
-              iconName = 'person';
-            }
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
-        })}
+          header: () => <NavigationBar />, // Custom navigation bar with logout
+        }}
       >
-        <Tab.Screen name="Search" component={SearchStack} />
-        <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Profile" component={ProfileScreen} />
-      </Tab.Navigator>
+        <Stack.Screen 
+          name="Home" 
+          component={HomeScreen}
+          options={{ title: 'Juno - Home' }}
+        />
+        <Stack.Screen 
+          name="Profile" 
+          component={ProfileScreen}
+          options={{ title: 'Juno - Profile' }}
+        />
+        <Stack.Screen 
+          name="Search" 
+          component={SearchScreen}
+          options={{ title: 'Juno - Search Friends' }}
+        />
+        <Stack.Screen 
+          name="Rides" 
+          component={RidesScreen}
+          options={{ title: 'Juno - My Rides' }}
+        />
+        <Stack.Screen 
+          name="AddFriend" 
+          component={AddFriendScreen}
+          options={{ title: 'Juno - Add Friend' }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+const UnauthenticatedApp = () => {
+  const scheme = useColorScheme();
+
+  const linking = {
+    prefixes: ['http://localhost:19006', 'https://yourapp.com'],
+    config: {
+      screens: {
+        Login: '/login',
+      },
+    },
+  };
+
+  return (
+    <NavigationContainer 
+      theme={scheme === 'dark' ? DarkTheme : DefaultTheme}
+      linking={Platform.OS === 'web' ? linking : undefined}
+    >
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false, // No header for login
+        }}
+      >
+        <Stack.Screen 
+          name="Login" 
+          component={LoginScreen}
+          options={{ title: 'Juno - Login' }}
+        />
+      </Stack.Navigator>
     </NavigationContainer>
   );
 };
@@ -69,7 +117,7 @@ const AppContent = () => {
     return null; // Or a loading screen
   }
 
-  return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />;
+  return isAuthenticated ? <AuthenticatedApp /> : <UnauthenticatedApp />;
 };
 
 const App = () => {
