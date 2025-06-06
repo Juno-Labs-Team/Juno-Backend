@@ -1,0 +1,22 @@
+{
+  "username": "NoGambling",
+  "firstName": "Daniel",
+  "lastName": "Apollonsky",
+  "profilePic": "https://media.istockphoto.com/id/1201144328/photo/smiling-black-man-in-suit-posing-on-studio-background.jpg?s=2048x2048&w=is&k=20&c=Lj8Y55gIOg2IFkwk6PaFlPIqCshgt7L8EX8g9MySPkY=",
+  "description": "This guy is so sick and cool and hot! Black men! Black men! Black men!",
+  "userMood": "focused",
+  "accountCreated": "2025-06-04T21:18:29.131282Z",
+  "classYear": "2027",
+  "school": "Freehold High School",
+  "schoolAbreviation": "FHS",
+  "numberOfRides": "120",
+  "averageRating": "4.95", 
+  "numRatings": 110,
+  "car": {
+    "make": "Tesla",
+    "model": "Model 3",
+    "year": "2024",
+    "color": "Midnight Silver",
+    "picture": "https://unpluggedperformance.com/wp-content/uploads/2023/02/Unplugged-Performance-Tesla-Model-3-UP-03-18in-9-square-Satin-Grey-Image-4-450x450.jpg"
+  }
+}
