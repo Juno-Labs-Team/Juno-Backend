@@ -1,82 +1,461 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import friendsData from './PlayerDatabase.json'; // Import JSON file
+import {
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  Alert,
+  RefreshControl,
+  SafeAreaView,
+  Animated,
+  Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import apiClient from '../services/api';
 
-const SearchScreen = () => {
+const NEON = '#00ffe7';
+
+const GlassCard = ({ children, style, onPress }) => (
+  <TouchableOpacity 
+    style={[styles.glassCard, style]} 
+    onPress={onPress}
+    activeOpacity={0.9}
+  >
+    {children}
+  </TouchableOpacity>
+);
+
+const SearchScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [addingFriend, setAddingFriend] = useState(false); // Track "Add Friend" mode
-  const navigation = useNavigation();
+  const [searchResults, setSearchResults] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const fadeAnim = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity onPress={() => setAddingFriend(prev => !prev)}>
-          <Text style={styles.addButton}>{addingFriend ? 'Cancel' : '+ Add Friend'}</Text>
+    loadFriends();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  useEffect(() => {
+    if (searchQuery.length > 2) {
+      searchUsers();
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery]);
+
+  const loadFriends = async () => {
+    try {
+      const response = await apiClient.getFriends();
+      setFriends(response.friends || []);
+    } catch (error) {
+      console.error('Failed to load friends:', error);
+    }
+  };
+
+  const searchUsers = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.searchUsers(searchQuery);
+      setSearchResults(response.users || []);
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addFriend = async (userId) => {
+    try {
+      await apiClient.addFriend(userId);
+      Alert.alert('Success', 'Friend request sent!');
+      loadFriends();
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to send friend request');
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadFriends();
+    setRefreshing(false);
+  };
+
+  const renderUser = ({ item }) => {
+    const isFriend = friends.some(friend => friend.id === item.id);
+    
+    return (
+      <GlassCard style={styles.userCard}>
+        <Image
+          source={{ uri: item.profilePicture || 'https://via.placeholder.com/60' }}
+          style={styles.userAvatar}
+        />
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>
+            {item.firstName} {item.lastName}
+          </Text>
+          <Text style={styles.userHandle}>@{item.username}</Text>
+          {item.school && (
+            <Text style={styles.userSchool}>{item.school}</Text>
+          )}
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            isFriend ? styles.friendButton : styles.addButton
+          ]}
+          onPress={() => !isFriend && addFriend(item.id)}
+          disabled={isFriend}
+        >
+          <Ionicons 
+            name={isFriend ? "checkmark-circle" : "person-add"} 
+            size={20} 
+            color={isFriend ? "#4CAF50" : "#000"} 
+          />
+          <Text style={[
+            styles.actionButtonText,
+            isFriend ? { color: "#4CAF50" } : { color: "#000" }
+          ]}>
+            {isFriend ? "Friends" : "Add"}
+          </Text>
         </TouchableOpacity>
-      ),
-    });
-  }, [navigation, addingFriend]);
+      </GlassCard>
+    );
+  };
 
-  const filteredUsers = addingFriend
-  ? friendsData.filter(user =>
-      user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.lastName.toLowerCase().includes(searchQuery.toLowerCase())
-    ) 
-  : friendsData.filter(friend =>
-      friend.online && friend.distance === "Nearby" &&
-      (friend.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      friend.lastName.toLowerCase().includes(searchQuery.toLowerCase()))
-    ); 
-
-
+  const renderFriend = ({ item }) => (
+    <GlassCard style={styles.friendCard}>
+      <Image
+        source={{ uri: item.profilePicture || 'https://via.placeholder.com/50' }}
+        style={styles.friendAvatar}
+      />
+      <View style={styles.friendInfo}>
+        <Text style={styles.friendName}>
+          {item.firstName} {item.lastName}
+        </Text>
+        <Text style={styles.friendHandle}>@{item.username}</Text>
+      </View>
+      <View style={styles.friendStatus}>
+        <View style={[styles.onlineIndicator, { backgroundColor: '#4CAF50' }]} />
+        <Text style={styles.statusText}>Online</Text>
+      </View>
+    </GlassCard>
+  );
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.searchBar}
-        placeholder={addingFriend ? "Search for friends..." : "Find friends..."}
-        placeholderTextColor="#aaa"
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-      />
-      <FlatList
-        data={filteredUsers}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item }) => (
-          <Text style={styles.userItem}>
-            {item.firstName} {item.lastName} 
-          </Text>
+    <SafeAreaView style={styles.container}>
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Find Friends</Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => navigation.navigate('AddFriend')}
+          >
+            <Ionicons name="person-add" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color={NEON} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name or username..."
+              placeholderTextColor="#666"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Search Results */}
+        {searchQuery.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Search Results {searchResults.length > 0 && `(${searchResults.length})`}
+            </Text>
+            {loading ? (
+              <GlassCard style={styles.loadingCard}>
+                <Ionicons name="hourglass" size={32} color={NEON} />
+                <Text style={styles.loadingText}>Searching...</Text>
+              </GlassCard>
+            ) : (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={renderUser}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={() => (
+                  <GlassCard style={styles.emptyCard}>
+                    <Ionicons name="person-outline" size={48} color="#666" />
+                    <Text style={styles.emptyText}>
+                      {searchQuery.length > 2 ? "No users found" : "Type to search"}
+                    </Text>
+                  </GlassCard>
+                )}
+              />
+            )}
+          </View>
         )}
-      />
-    </View>
+
+        {/* Friends List */}
+        <View style={[styles.section, { flex: 1 }]}>
+          <Text style={styles.sectionTitle}>
+            Your Friends ({friends.length})
+          </Text>
+          <FlatList
+            data={friends}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderFriend}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={NEON}
+                colors={[NEON]}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={() => (
+              <GlassCard style={styles.emptyCard}>
+                <Ionicons name="people-outline" size={48} color="#666" />
+                <Text style={styles.emptyText}>No friends yet</Text>
+                <Text style={styles.emptySubText}>
+                  Search for classmates to start carpooling!
+                </Text>
+              </GlassCard>
+            )}
+          />
+        </View>
+      </Animated.View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#121212',
+    backgroundColor: '#0a0c1e',
   },
-  searchBar: {
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#aaa',
-    borderRadius: 10,
-    paddingLeft: 10,
-    color: '#fff',
-    marginBottom: 20,
+  content: {
+    flex: 1,
   },
-  userItem: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'web' ? 20 : 60,
+    paddingBottom: 20,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
     color: '#fff',
-    fontSize: 18,
-    marginBottom: 10,
+    textShadowColor: NEON,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+    letterSpacing: 1,
   },
   addButton: {
+    backgroundColor: NEON,
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: NEON,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  searchContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 25,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(24, 24, 37, 0.8)',
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderWidth: 2,
+    borderColor: `${NEON}44`,
+    backdropFilter: 'blur(10px)',
+    shadowColor: NEON,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: NEON,
+    marginBottom: 15,
+    letterSpacing: 0.5,
+  },
+  glassCard: {
+    backgroundColor: 'rgba(24, 24, 37, 0.7)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: `${NEON}33`,
+    backdropFilter: 'blur(10px)',
+    shadowColor: NEON,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 12,
+  },
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  userAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: NEON,
+  },
+  userInfo: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  userHandle: {
+    fontSize: 14,
+    color: '#b1f6e8',
+    marginBottom: 2,
+  },
+  userSchool: {
+    fontSize: 12,
+    color: '#666',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  addButton: {
+    backgroundColor: NEON,
+    borderColor: NEON,
+  },
+  friendButton: {
+    backgroundColor: 'transparent',
+    borderColor: '#4CAF50',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  friendCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+  },
+  friendAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  friendInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  friendName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  friendHandle: {
+    fontSize: 14,
+    color: '#b1f6e8',
+  },
+  friendStatus: {
+    alignItems: 'center',
+  },
+  onlineIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  loadingCard: {
+    alignItems: 'center',
+    padding: 30,
+  },
+  loadingText: {
     color: '#fff',
     fontSize: 16,
-    paddingHorizontal: 15,
+    marginTop: 10,
+    fontWeight: '500',
+  },
+  emptyCard: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 15,
+    marginBottom: 8,
+  },
+  emptySubText: {
+    color: '#555',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 
