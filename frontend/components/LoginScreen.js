@@ -17,16 +17,21 @@ const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [devMode, setDevMode] = useState(false);
   const [token, setToken] = useState('');
-  const { login } = useAuth();
+  const { login, loginWithToken } = useAuth(); // Add loginWithToken here
 
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      await login();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Home' }],
-      });
+      const result = await login();
+      
+      if (result.success) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Main' }], // Changed from 'Home' to 'Main'
+        });
+      } else {
+        Alert.alert('Login Instructions', result.message || 'Please copy the JWT token from the browser and paste it in dev mode.');
+      }
     } catch (error) {
       Alert.alert('Login Failed', 'Unable to sign in. Please try again.');
       console.error('Login error:', error);
@@ -43,12 +48,17 @@ const LoginScreen = ({ navigation }) => {
     
     try {
       setLoading(true);
-      // For development - bypass normal auth
-      await login(token);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Home' }],
-      });
+      // Use loginWithToken instead of login
+      const result = await loginWithToken(token.trim());
+      
+      if (result.success) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Main' }], // Changed from 'Home' to 'Main'
+        });
+      } else {
+        Alert.alert('Login Failed', result.error || 'Invalid token');
+      }
     } catch (error) {
       Alert.alert('Login Failed', 'Invalid token');
     } finally {
