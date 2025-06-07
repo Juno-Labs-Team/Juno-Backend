@@ -29,15 +29,18 @@ const GlassCard = ({ children, style, onPress }) => (
 );
 
 const SearchScreen = ({ navigation }) => {
+  const [activeTab, setActiveTab] = useState('friends'); // 'friends' or 'locations'
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [locationResults, setLocationResults] = useState([]);
   const [friends, setFriends] = useState([]);
+  const [savedLocations, setSavedLocations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
-    loadFriends();
+    loadData();
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 800,
@@ -47,11 +50,27 @@ const SearchScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (searchQuery.length > 2) {
-      searchUsers();
+      if (activeTab === 'friends') {
+        searchUsers();
+      } else {
+        searchLocations();
+      }
     } else {
       setSearchResults([]);
+      setLocationResults([]);
     }
-  }, [searchQuery]);
+  }, [searchQuery, activeTab]);
+
+  const loadData = async () => {
+    try {
+      await Promise.all([
+        loadFriends(),
+        loadSavedLocations()
+      ]);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    }
+  };
 
   const loadFriends = async () => {
     try {
@@ -59,6 +78,15 @@ const SearchScreen = ({ navigation }) => {
       setFriends(response.friends || []);
     } catch (error) {
       console.error('Failed to load friends:', error);
+    }
+  };
+
+  const loadSavedLocations = async () => {
+    try {
+      const response = await apiClient.getSavedLocations();
+      setSavedLocations(response.locations || []);
+    } catch (error) {
+      console.error('Failed to load saved locations:', error);
     }
   };
 
@@ -74,6 +102,18 @@ const SearchScreen = ({ navigation }) => {
     }
   };
 
+  const searchLocations = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.searchLocations(searchQuery);
+      setLocationResults(response.locations || []);
+    } catch (error) {
+      console.error('Location search failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addFriend = async (userId) => {
     try {
       await apiClient.addFriend(userId);
@@ -84,9 +124,25 @@ const SearchScreen = ({ navigation }) => {
     }
   };
 
+  const saveLocation = async (location) => {
+    try {
+      await apiClient.saveLocation({
+        name: location.name || location.address,
+        address: location.address,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        location_type: 'other'
+      });
+      Alert.alert('Success', 'Location saved!');
+      loadSavedLocations();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save location');
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadFriends();
+    await loadData();
     setRefreshing(false);
   };
 
@@ -132,6 +188,48 @@ const SearchScreen = ({ navigation }) => {
     );
   };
 
+  const renderLocation = ({ item }) => (
+    <GlassCard style={styles.locationCard}>
+      <View style={styles.locationIcon}>
+        <Ionicons name="location" size={24} color={NEON} />
+      </View>
+      <View style={styles.locationInfo}>
+        <Text style={styles.locationName}>{item.name || item.address}</Text>
+        <Text style={styles.locationAddress}>{item.address}</Text>
+        {item.distance && (
+          <Text style={styles.locationDistance}>{item.distance} away</Text>
+        )}
+      </View>
+      <TouchableOpacity
+        style={styles.saveLocationButton}
+        onPress={() => saveLocation(item)}
+      >
+        <Ionicons name="bookmark-outline" size={20} color={NEON} />
+      </TouchableOpacity>
+    </GlassCard>
+  );
+
+  const renderSavedLocation = ({ item }) => (
+    <GlassCard style={styles.savedLocationCard}>
+      <View style={styles.locationIcon}>
+        <Ionicons 
+          name={item.location_type === 'home' ? 'home' : 
+                item.location_type === 'work' ? 'briefcase' :
+                item.location_type === 'school' ? 'school' : 'location'} 
+          size={24} 
+          color={NEON} 
+        />
+      </View>
+      <View style={styles.locationInfo}>
+        <Text style={styles.locationName}>{item.name}</Text>
+        <Text style={styles.locationAddress}>{item.address}</Text>
+      </View>
+      <TouchableOpacity style={styles.useLocationButton}>
+        <Text style={styles.useLocationText}>Use</Text>
+      </TouchableOpacity>
+    </GlassCard>
+  );
+
   const renderFriend = ({ item }) => (
     <GlassCard style={styles.friendCard}>
       <Image
@@ -156,12 +254,49 @@ const SearchScreen = ({ navigation }) => {
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Find Friends</Text>
+          <Text style={styles.title}>Find & Explore</Text>
           <TouchableOpacity 
             style={styles.addButton}
             onPress={() => navigation.navigate('AddFriend')}
           >
             <Ionicons name="person-add" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Tab Selector */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'friends' && styles.activeTab]}
+            onPress={() => setActiveTab('friends')}
+          >
+            <Ionicons 
+              name="people" 
+              size={20} 
+              color={activeTab === 'friends' ? '#000' : NEON} 
+            />
+            <Text style={[
+              styles.tabText,
+              activeTab === 'friends' && styles.activeTabText
+            ]}>
+              Friends
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'locations' && styles.activeTab]}
+            onPress={() => setActiveTab('locations')}
+          >
+            <Ionicons 
+              name="location" 
+              size={20} 
+              color={activeTab === 'locations' ? '#000' : NEON} 
+            />
+            <Text style={[
+              styles.tabText,
+              activeTab === 'locations' && styles.activeTabText
+            ]}>
+              Locations
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -171,7 +306,7 @@ const SearchScreen = ({ navigation }) => {
             <Ionicons name="search" size={20} color={NEON} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by name or username..."
+              placeholder={activeTab === 'friends' ? "Search by name or username..." : "Search locations..."}
               placeholderTextColor="#666"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -185,65 +320,132 @@ const SearchScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Search Results */}
-        {searchQuery.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Search Results {searchResults.length > 0 && `(${searchResults.length})`}
-            </Text>
-            {loading ? (
-              <GlassCard style={styles.loadingCard}>
-                <Ionicons name="hourglass" size={32} color={NEON} />
-                <Text style={styles.loadingText}>Searching...</Text>
-              </GlassCard>
-            ) : (
+        {/* Content based on active tab */}
+        {activeTab === 'friends' ? (
+          <>
+            {/* Search Results */}
+            {searchQuery.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  Search Results {searchResults.length > 0 && `(${searchResults.length})`}
+                </Text>
+                {loading ? (
+                  <GlassCard style={styles.loadingCard}>
+                    <Ionicons name="hourglass" size={32} color={NEON} />
+                    <Text style={styles.loadingText}>Searching...</Text>
+                  </GlassCard>
+                ) : (
+                  <FlatList
+                    data={searchResults}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={renderUser}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={() => (
+                      <GlassCard style={styles.emptyCard}>
+                        <Ionicons name="person-outline" size={48} color="#666" />
+                        <Text style={styles.emptyText}>
+                          {searchQuery.length > 2 ? "No users found" : "Type to search"}
+                        </Text>
+                      </GlassCard>
+                    )}
+                  />
+                )}
+              </View>
+            )}
+
+            {/* Friends List */}
+            <View style={[styles.section, { flex: 1 }]}>
+              <Text style={styles.sectionTitle}>
+                Your Friends ({friends.length})
+              </Text>
               <FlatList
-                data={searchResults}
+                data={friends}
                 keyExtractor={(item) => item.id.toString()}
-                renderItem={renderUser}
+                renderItem={renderFriend}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={NEON}
+                    colors={[NEON]}
+                  />
+                }
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={() => (
                   <GlassCard style={styles.emptyCard}>
-                    <Ionicons name="person-outline" size={48} color="#666" />
-                    <Text style={styles.emptyText}>
-                      {searchQuery.length > 2 ? "No users found" : "Type to search"}
+                    <Ionicons name="people-outline" size={48} color="#666" />
+                    <Text style={styles.emptyText}>No friends yet</Text>
+                    <Text style={styles.emptySubText}>
+                      Search for classmates to start carpooling!
                     </Text>
                   </GlassCard>
                 )}
               />
-            )}
-          </View>
-        )}
-
-        {/* Friends List */}
-        <View style={[styles.section, { flex: 1 }]}>
-          <Text style={styles.sectionTitle}>
-            Your Friends ({friends.length})
-          </Text>
-          <FlatList
-            data={friends}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderFriend}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={NEON}
-                colors={[NEON]}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={() => (
-              <GlassCard style={styles.emptyCard}>
-                <Ionicons name="people-outline" size={48} color="#666" />
-                <Text style={styles.emptyText}>No friends yet</Text>
-                <Text style={styles.emptySubText}>
-                  Search for classmates to start carpooling!
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Location Search Results */}
+            {searchQuery.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                  Location Results {locationResults.length > 0 && `(${locationResults.length})`}
                 </Text>
-              </GlassCard>
+                {loading ? (
+                  <GlassCard style={styles.loadingCard}>
+                    <Ionicons name="hourglass" size={32} color={NEON} />
+                    <Text style={styles.loadingText}>Searching locations...</Text>
+                  </GlassCard>
+                ) : (
+                  <FlatList
+                    data={locationResults}
+                    keyExtractor={(item, index) => `location-${index}`}
+                    renderItem={renderLocation}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={() => (
+                      <GlassCard style={styles.emptyCard}>
+                        <Ionicons name="location-outline" size={48} color="#666" />
+                        <Text style={styles.emptyText}>
+                          {searchQuery.length > 2 ? "No locations found" : "Type to search"}
+                        </Text>
+                      </GlassCard>
+                    )}
+                  />
+                )}
+              </View>
             )}
-          />
-        </View>
+
+            {/* Saved Locations */}
+            <View style={[styles.section, { flex: 1 }]}>
+              <Text style={styles.sectionTitle}>
+                Saved Locations ({savedLocations.length})
+              </Text>
+              <FlatList
+                data={savedLocations}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={renderSavedLocation}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={NEON}
+                    colors={[NEON]}
+                  />
+                }
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={() => (
+                  <GlassCard style={styles.emptyCard}>
+                    <Ionicons name="bookmark-outline" size={48} color="#666" />
+                    <Text style={styles.emptyText}>No saved locations</Text>
+                    <Text style={styles.emptySubText}>
+                      Search and save frequently used places!
+                    </Text>
+                  </GlassCard>
+                )}
+              />
+            </View>
+          </>
+        )}
       </Animated.View>
     </SafeAreaView>
   );
@@ -262,7 +464,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20, // Reduced from 60 since we have top header now
+    paddingTop: 20,
     paddingBottom: 20,
   },
   title: {
@@ -286,6 +488,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 8,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    backgroundColor: 'rgba(24, 24, 37, 0.8)',
+    borderRadius: 25,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 21,
+    gap: 8,
+  },
+  activeTab: {
+    backgroundColor: NEON,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: NEON,
+  },
+  activeTabText: {
+    color: '#000',
   },
   searchContainer: {
     paddingHorizontal: 20,
@@ -389,6 +619,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  locationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  savedLocationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  locationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 255, 231, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: '#b1f6e8',
+    marginBottom: 2,
+  },
+  locationDistance: {
+    fontSize: 12,
+    color: '#666',
+  },
+  saveLocationButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 255, 231, 0.1)',
+  },
+  useLocationButton: {
+    backgroundColor: NEON,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  useLocationText: {
+    color: '#000',
+    fontWeight: '600',
+    fontSize: 14,
   },
   friendCard: {
     flexDirection: 'row',
