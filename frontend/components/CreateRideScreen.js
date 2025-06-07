@@ -9,10 +9,16 @@ import {
   Alert,
   Modal,
   FlatList,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import apiClient from '../services/api';
+
+// Conditional import for DateTimePicker
+let DateTimePicker;
+if (Platform.OS !== 'web') {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+}
 
 const NEON = '#00ffe7';
 
@@ -131,6 +137,44 @@ const LocationPicker = ({ visible, onClose, onSelect, title }) => {
   );
 };
 
+// Web-compatible Date Input Component
+const WebDateInput = ({ value, onChange, placeholder }) => {
+  const handleChange = (e) => {
+    const newDate = new Date(e.target.value);
+    onChange(newDate);
+  };
+
+  const formatForInput = (date) => {
+    return date.toISOString().slice(0, 16); // Format for datetime-local input
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <input
+        type="datetime-local"
+        value={formatForInput(value)}
+        onChange={handleChange}
+        style={{
+          flex: 1,
+          fontSize: 16,
+          color: '#fff',
+          backgroundColor: 'transparent',
+          border: 'none',
+          outline: 'none',
+          marginLeft: 12,
+          fontFamily: 'inherit',
+        }}
+      />
+    );
+  }
+
+  return (
+    <Text style={styles.dateTimeText}>
+      {value.toLocaleDateString()} {value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+    </Text>
+  );
+};
+
 const CreateRideScreen = ({ navigation }) => {
   const [rideData, setRideData] = useState({
     origin: null,
@@ -157,6 +201,18 @@ const CreateRideScreen = ({ navigation }) => {
       ...prev,
       [locationPickerType]: location
     }));
+  };
+
+  const handleDateTimeChange = (newDateTime) => {
+    setRideData(prev => ({ ...prev, departureTime: newDateTime }));
+  };
+
+  const openDateTimePicker = () => {
+    if (Platform.OS === 'web') {
+      // Web doesn't need a separate picker, it's handled inline
+      return;
+    }
+    setShowDatePicker(true);
   };
 
   const handleCreateRide = async () => {
@@ -236,27 +292,18 @@ const CreateRideScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         {/* Date & Time */}
-        <View style={styles.dateTimeContainer}>
-          <TouchableOpacity
-            style={styles.dateTimeButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Ionicons name="calendar" size={20} color={NEON} />
-            <Text style={styles.dateTimeText}>
-              {rideData.departureTime.toLocaleDateString()}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.dateTimeButton}
-            onPress={() => setShowTimePicker(true)}
-          >
-            <Ionicons name="time" size={20} color={NEON} />
-            <Text style={styles.dateTimeText}>
-              {rideData.departureTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.dateTimeButton}
+          onPress={openDateTimePicker}
+          disabled={Platform.OS === 'web'}
+        >
+          <Ionicons name="calendar" size={20} color={NEON} />
+          <WebDateInput
+            value={rideData.departureTime}
+            onChange={handleDateTimeChange}
+            placeholder="Select date and time"
+          />
+        </TouchableOpacity>
 
         {/* Passengers & Price */}
         <View style={styles.row}>
@@ -328,31 +375,16 @@ const CreateRideScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Date Picker */}
-      {showDatePicker && (
+      {/* Native Date/Time Pickers (Mobile only) */}
+      {Platform.OS !== 'web' && showDatePicker && DateTimePicker && (
         <DateTimePicker
           value={rideData.departureTime}
-          mode="date"
+          mode="datetime"
           display="default"
           onChange={(event, selectedDate) => {
             setShowDatePicker(false);
             if (selectedDate) {
               setRideData(prev => ({ ...prev, departureTime: selectedDate }));
-            }
-          }}
-        />
-      )}
-
-      {/* Time Picker */}
-      {showTimePicker && (
-        <DateTimePicker
-          value={rideData.departureTime}
-          mode="time"
-          display="default"
-          onChange={(event, selectedTime) => {
-            setShowTimePicker(false);
-            if (selectedTime) {
-              setRideData(prev => ({ ...prev, departureTime: selectedTime }));
             }
           }}
         />
@@ -418,18 +450,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '500',
   },
-  dateTimeContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
   dateTimeButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(24, 24, 37, 0.8)',
     borderRadius: 16,
     padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: `${NEON}33`,
   },

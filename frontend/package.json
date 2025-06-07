@@ -37,7 +37,8 @@
     "react-native-svg": "15.11.2",
     "react-native-system-navigation-bar": "*",
     "react-native-web": "^0.20.0",
-    "react-native-webview": "^13.14.1"
+    "react-native-webview": "^13.14.1",
+    "@react-native-community/datetimepicker": "8.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"
