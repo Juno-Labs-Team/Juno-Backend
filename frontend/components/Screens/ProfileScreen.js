@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   header: {
-    paddingTop: 60,
+    paddingTop: 20, // Reduced from 60 since we have top header now
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
