@@ -41,6 +41,9 @@ CREATE TABLE user_profiles (
     preferences JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    onboarding_completed BOOLEAN DEFAULT FALSE,
+    onboarding_completed_at TIMESTAMP NULL,
+    onboarding_step INTEGER DEFAULT 0,
     UNIQUE(user_id)
 );
 
@@ -198,6 +201,23 @@ CREATE TABLE user_badges (
     is_visible BOOLEAN DEFAULT TRUE
 );
 
+-- Track profile completion and onboarding metrics
+CREATE TABLE IF NOT EXISTS profile_analytics (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    onboarding_started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    onboarding_completed_at TIMESTAMP NULL,
+    steps_completed JSONB DEFAULT '[]',
+    time_to_complete_seconds INTEGER NULL,
+    profile_completion_percentage INTEGER DEFAULT 0,
+    last_profile_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id)
+);
+
+-- Create index for analytics queries
+CREATE INDEX IF NOT EXISTS idx_profile_analytics_user_id ON profile_analytics(user_id);
+CREATE INDEX IF NOT EXISTS idx_profile_analytics_completion ON profile_analytics(onboarding_completed_at);
+
 -- Create all indexes
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_username ON users(username);
@@ -207,6 +227,7 @@ CREATE INDEX idx_users_active ON users(is_active);
 CREATE INDEX idx_user_profiles_user_id ON user_profiles(user_id);
 CREATE INDEX idx_user_profiles_school ON user_profiles(school);
 CREATE INDEX idx_user_profiles_has_car ON user_profiles(has_car);
+CREATE INDEX idx_user_profiles_onboarding ON user_profiles(onboarding_completed, onboarding_step);
 
 CREATE INDEX idx_friendships_user_id ON friendships(user_id);
 CREATE INDEX idx_friendships_friend_id ON friendships(friend_id);
@@ -350,6 +371,39 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to calculate profile completion percentage
+CREATE OR REPLACE FUNCTION calculate_profile_completion(user_id_param INTEGER)
+RETURNS INTEGER AS $$
+DECLARE
+    completion_score INTEGER := 0;
+    total_possible INTEGER := 100;
+BEGIN
+    SELECT 
+        CASE WHEN u.first_name IS NOT NULL AND u.first_name != '' THEN 15 ELSE 0 END +
+        CASE WHEN u.last_name IS NOT NULL AND u.last_name != '' THEN 15 ELSE 0 END +
+        CASE WHEN u.phone IS NOT NULL AND u.phone != '' THEN 10 ELSE 0 END +
+        CASE WHEN u.profile_picture_url IS NOT NULL AND u.profile_picture_url != '' THEN 10 ELSE 0 END +
+        CASE WHEN up.school IS NOT NULL AND up.school != '' THEN 20 ELSE 0 END +
+        CASE WHEN up.class_year IS NOT NULL AND up.class_year != '' THEN 20 ELSE 0 END +
+        CASE WHEN up.major IS NOT NULL AND up.major != '' THEN 5 ELSE 0 END +
+        CASE WHEN up.bio IS NOT NULL AND up.bio != '' THEN 5 ELSE 0 END
+    INTO completion_score
+    FROM users u
+    LEFT JOIN user_profiles up ON u.id = up.user_id
+    WHERE u.id = user_id_param;
+    
+    -- Update analytics table
+    INSERT INTO profile_analytics (user_id, profile_completion_percentage, last_profile_update)
+    VALUES (user_id_param, COALESCE(completion_score, 0), CURRENT_TIMESTAMP)
+    ON CONFLICT (user_id)
+    DO UPDATE SET
+        profile_completion_percentage = EXCLUDED.profile_completion_percentage,
+        last_profile_update = CURRENT_TIMESTAMP;
+    
+    RETURN COALESCE(completion_score, 0);
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create views
 CREATE VIEW user_friends AS
 SELECT 
@@ -429,4 +483,83 @@ INSERT INTO schools (name, domain, address, latitude, longitude) VALUES
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO your_app_user;
 -- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO your_app_user;
 -- GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO your_app_user;
+
+-- Add onboarding tracking columns to user_profiles table
+ALTER TABLE user_profiles 
+ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMP NULL,
+ADD COLUMN IF NOT EXISTS onboarding_step INTEGER DEFAULT 0;
+
+-- Update existing users who have complete profiles
+UPDATE user_profiles 
+SET onboarding_completed = TRUE, 
+    onboarding_completed_at = CURRENT_TIMESTAMP,
+    onboarding_step = 3
+WHERE school IS NOT NULL 
+AND school != '' 
+AND class_year IS NOT NULL 
+AND class_year != '';
+
+-- Create index for faster onboarding queries
+CREATE INDEX IF NOT EXISTS idx_user_profiles_onboarding ON user_profiles(onboarding_completed, onboarding_step);
+
+-- Add utility functions for onboarding
+CREATE OR REPLACE FUNCTION check_onboarding_complete(user_id_param INTEGER)
+RETURNS BOOLEAN AS $$
+DECLARE
+    is_complete BOOLEAN := FALSE;
+BEGIN
+    SELECT 
+        CASE 
+            WHEN up.onboarding_completed = TRUE THEN TRUE
+            WHEN u.first_name IS NOT NULL 
+                AND u.last_name IS NOT NULL 
+                AND up.school IS NOT NULL 
+                AND up.class_year IS NOT NULL 
+                AND up.school != '' 
+                AND up.class_year != '' THEN TRUE
+            ELSE FALSE
+        END
+    INTO is_complete
+    FROM users u
+    LEFT JOIN user_profiles up ON u.id = up.user_id
+    WHERE u.id = user_id_param;
+    
+    -- Auto-update if conditions are met but flag is false
+    IF is_complete = TRUE THEN
+        UPDATE user_profiles 
+        SET onboarding_completed = TRUE,
+            onboarding_completed_at = COALESCE(onboarding_completed_at, CURRENT_TIMESTAMP)
+        WHERE user_id = user_id_param 
+        AND onboarding_completed = FALSE;
+    END IF;
+    
+    RETURN COALESCE(is_complete, FALSE);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Add trigger to auto-update onboarding status
+CREATE OR REPLACE FUNCTION auto_update_onboarding_status()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Check if basic required fields are now complete
+    IF NEW.school IS NOT NULL 
+        AND NEW.school != '' 
+        AND NEW.class_year IS NOT NULL 
+        AND NEW.class_year != ''
+        AND (OLD.onboarding_completed = FALSE OR OLD.onboarding_completed IS NULL) THEN
+        
+        NEW.onboarding_completed := TRUE;
+        NEW.onboarding_completed_at := CURRENT_TIMESTAMP;
+        NEW.onboarding_step := 3;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_auto_update_onboarding
+    BEFORE UPDATE ON user_profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION auto_update_onboarding_status();
 
