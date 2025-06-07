@@ -10,6 +10,7 @@ import { useColorScheme, Platform, View, ActivityIndicator, Text } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginScreen from './components/LoginScreen';
+import OnboardingScreen from './components/OnboardingScreen';
 import SearchScreen from './components/SearchScreen';
 import AddFriendScreen from './components/AddFriendScreen';
 import HomeScreen from './components/HomeScreen';
@@ -133,89 +134,30 @@ const TabNavigator = () => {
   );
 };
 
-const AuthenticatedApp = () => {
-  const scheme = useColorScheme();
-
-  const linking = {
-    prefixes: ['http://localhost:19006', 'https://yourapp.com'],
-    config: {
-      screens: {
-        Main: {
-          screens: {
-            Home: '/rides',
-            Search: {
-              screens: {
-                SearchMain: '/search',
-                AddFriend: '/add-friend',
-              }
-            },
-            Profile: {
-              screens: {
-                ProfileMain: '/profile',
-                EditProfile: '/edit-profile',
-              }
-            },
-          }
-        },
-      },
-    },
-  };
-
-  return (
-    <NavigationContainer 
-      theme={scheme === 'dark' ? DarkTheme : DefaultTheme}
-      linking={Platform.OS === 'web' ? linking : undefined}
-    >
-      <Stack.Navigator
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: '#0a0c1e',
-            shadowColor: NEON,
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-            elevation: 8,
-          },
-          headerTintColor: '#fff',
-          header: () => <TopHeader />,
-        }}
-      >
-        <Stack.Screen 
-          name="Main" 
-          component={TabNavigator}
-          options={{ headerShown: true }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
-};
-
-const UnauthenticatedApp = () => {
-  return (
-    <NavigationContainer theme={DarkTheme}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Login" component={LoginScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
-};
-
+// Main App component - SINGLE NavigationContainer
 const App = () => {
   return (
     <AuthProvider>
-      <NavigationContainer>
+      <NavigationContainer theme={DarkTheme}>
         <AuthController />
       </NavigationContainer>
     </AuthProvider>
   );
 };
 
+// Auth Controller - handles authenticated vs unauthenticated screens
 const AuthController = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, needsOnboarding } = useAuth();
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0c1e' }}>
-        <ActivityIndicator size="large" color="#00ffe7" />
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        backgroundColor: '#0a0c1e' 
+      }}>
+        <ActivityIndicator size="large" color={NEON} />
         <Text style={{ color: '#fff', marginTop: 10 }}>Loading...</Text>
       </View>
     );
@@ -224,14 +166,31 @@ const AuthController = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {user ? (
-        // User is authenticated
-        <Stack.Screen name="Main" component={AuthenticatedApp} />
+        needsOnboarding ? (
+          // User is authenticated but needs onboarding
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        ) : (
+          // User is authenticated and onboarded - show main app with TopHeader
+          <Stack.Screen 
+            name="AuthenticatedApp" 
+            component={AuthenticatedTabs}
+            options={{
+              headerShown: true,
+              header: () => <TopHeader />,
+            }}
+          />
+        )
       ) : (
-        // User is not authenticated
+        // User is not authenticated - show login
         <Stack.Screen name="Login" component={LoginScreen} />
       )}
     </Stack.Navigator>
   );
+};
+
+// Authenticated app with TopHeader
+const AuthenticatedTabs = () => {
+  return <TabNavigator />;
 };
 
 export default App;
