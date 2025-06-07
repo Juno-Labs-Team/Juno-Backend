@@ -28,7 +28,6 @@ export const AuthProvider = ({ children }) => {
       console.log('🔍 Checking auth status, token exists:', !!token);
       
       if (token) {
-        // Set the token in API client
         ApiClient.setAuthToken(token);
         const profile = await ApiClient.getProfile();
         console.log('✅ Profile loaded:', profile.profile.username);
@@ -48,13 +47,9 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('🔑 Logging in with token...');
       
-      // Store the token
       await AsyncStorage.setItem('authToken', token);
-      
-      // Set it in the API client
       ApiClient.setAuthToken(token);
       
-      // Get user profile
       const profile = await ApiClient.getProfile();
       setUser(profile.profile);
       
@@ -73,14 +68,12 @@ export const AuthProvider = ({ children }) => {
       const authUrl = 'https://juno-backend-6eamg.ondigitalocean.app/auth/google';
       
       if (Platform.OS === 'web') {
-        // For web, open in new tab
         window.open(authUrl, '_blank');
         return { 
           success: false, 
           message: 'A new tab has opened. Copy the JWT token from there and paste it in Dev Mode below.' 
         };
       } else {
-        // For mobile
         const result = await WebBrowser.openAuthSessionAsync(authUrl, 'exp://');
         
         if (result.type === 'success') {
@@ -109,19 +102,31 @@ export const AuthProvider = ({ children }) => {
     console.log('🚪 Starting logout process...');
     
     try {
-      // Always clear local state first (immediate logout)
+      // Step 1: Clear local state immediately (so UI updates right away)
       setUser(null);
+      
+      // Step 2: Clear stored token
       await AsyncStorage.removeItem('authToken');
+      
+      // Step 3: Clear API client token
       ApiClient.setAuthToken(null);
       
       console.log('✅ Local logout completed');
       
-      // Then try API logout (but don't fail if it doesn't work)
+      // Step 4: Try API logout (but don't fail the logout if this fails)
       try {
         await ApiClient.logout();
         console.log('✅ API logout successful');
       } catch (apiError) {
-        console.log('⚠️ API logout failed, but user is already logged out locally:', apiError.message);
+        console.log('⚠️ API logout failed, but user is logged out locally:', apiError.message);
+      }
+      
+      // Step 5: Clear any other cached data
+      try {
+        await AsyncStorage.removeItem('profileData');
+        console.log('✅ Profile data cleared');
+      } catch (error) {
+        console.log('⚠️ Could not clear profile data:', error);
       }
       
     } catch (error) {
@@ -130,7 +135,7 @@ export const AuthProvider = ({ children }) => {
       // Force clear everything even if there's an error
       setUser(null);
       try {
-        await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.clear();
         ApiClient.setAuthToken(null);
       } catch (forceError) {
         console.error('❌ Force logout failed:', forceError);
