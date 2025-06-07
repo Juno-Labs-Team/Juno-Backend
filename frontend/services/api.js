@@ -154,6 +154,10 @@ class ApiClient {
     });
   }
 
+  async getRideDetails(rideId) {
+    return this.request(`/api/rides/${rideId}`);
+  }
+
   async joinRide(rideId) {
     return this.request(`/api/rides/${rideId}/join`, {
       method: 'POST',
@@ -164,6 +168,45 @@ class ApiClient {
     return this.request(`/api/rides/${rideId}/leave`, {
       method: 'POST',
     });
+  }
+
+  async searchRides(filters = {}) {
+    const params = new URLSearchParams(filters);
+    return this.request(`/api/rides/search?${params}`);
+  }
+
+  // Location-related methods
+  async searchLocations(query) {
+    return this.request(`/api/maps/geocode?address=${encodeURIComponent(query)}`);
+  }
+
+  async getSavedLocations() {
+    return this.request('/api/locations');
+  }
+
+  async saveLocation(locationData) {
+    return this.request('/api/locations', {
+      method: 'POST',
+      body: JSON.stringify(locationData)
+    });
+  }
+
+  async deleteLocation(locationId) {
+    return this.request(`/api/locations/${locationId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async getNearbyRides(latitude, longitude, radius = 10) {
+    return this.request(`/api/maps/nearby?lat=${latitude}&lng=${longitude}&radius=${radius}`);
+  }
+
+  async calculateDistance(origin, destination) {
+    const params = new URLSearchParams({
+      origin: `${origin.lat},${origin.lng}`,
+      destination: `${destination.lat},${destination.lng}`
+    });
+    return this.request(`/api/maps/distance?${params}`);
   }
 
   // Upload methods
@@ -192,10 +235,11 @@ class ApiClient {
 
       return await response.json();
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Upload failed:', error);
       throw error;
     }
   }
 }
 
-export default new ApiClient();
+const apiClient = new ApiClient();
+export default apiClient;
