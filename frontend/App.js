@@ -15,7 +15,7 @@ import AddFriendScreen from './components/AddFriendScreen';
 import HomeScreen from './components/HomeScreen';
 import ProfileScreen from './components/Screens/ProfileScreen';
 import EditProfileScreen from './components/Screens/EditProfileScreen';
-import NavigationBar from './components/NavigationBar';
+import TopHeader from './components/TopHeader';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -55,9 +55,9 @@ const TabNavigator = () => {
           if (route.name === 'Search') {
             iconName = focused ? 'search' : 'search-outline';
           } else if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
+            iconName = focused ? 'car' : 'car-outline'; // Changed from home to car
           } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
+            iconName = focused ? 'person-circle' : 'person-circle-outline';
           }
 
           if (focused) {
@@ -72,7 +72,7 @@ const TabNavigator = () => {
           return (
             <Ionicons 
               name={iconName} 
-              size={size} 
+              size={focused ? size + 4 : size} 
               color={color}
               style={shadowProps}
             />
@@ -84,19 +84,20 @@ const TabNavigator = () => {
           backgroundColor: '#0a0c1e',
           borderTopColor: `${NEON}44`,
           borderTopWidth: 2,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-          paddingTop: 8,
-          height: Platform.OS === 'ios' ? 85 : 65,
+          paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+          paddingTop: 10,
+          height: Platform.OS === 'ios' ? 90 : 70,
           shadowColor: NEON,
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
-          elevation: 8,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
+          elevation: 12,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '600',
+          fontWeight: '700',
           letterSpacing: 0.5,
+          marginTop: 4,
         },
         headerShown: false,
       })}
@@ -163,13 +164,13 @@ const AuthenticatedApp = () => {
             elevation: 8,
           },
           headerTintColor: '#fff',
-          header: Platform.OS === 'web' ? () => <NavigationBar /> : undefined,
+          header: () => <TopHeader />,
         }}
       >
         <Stack.Screen 
           name="Main" 
           component={TabNavigator}
-          options={{ headerShown: Platform.OS === 'web' }}
+          options={{ headerShown: true }}
         />
       </Stack.Navigator>
     </NavigationContainer>
