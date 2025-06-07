@@ -199,7 +199,10 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.emptyText}>
               Check back later for upcoming rides or create your own!
             </Text>
-            <TouchableOpacity style={styles.createRideButton}>
+            <TouchableOpacity 
+              style={styles.createRideButton}
+              onPress={() => navigation.navigate('CreateRide')}
+            >
               <Ionicons name="add" size={20} color="#000" />
               <Text style={styles.createRideText}>Create Ride</Text>
             </TouchableOpacity>
