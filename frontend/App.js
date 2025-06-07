@@ -6,7 +6,7 @@ import {
 } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useColorScheme, Platform } from 'react-native';
+import { useColorScheme, Platform, View, ActivityIndicator, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginScreen from './components/LoginScreen';
@@ -199,21 +199,38 @@ const UnauthenticatedApp = () => {
   );
 };
 
-const AppContent = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return null;
-  }
-
-  return user ? <AuthenticatedApp /> : <UnauthenticatedApp />;
-};
-
 const App = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <NavigationContainer>
+        <AuthController />
+      </NavigationContainer>
     </AuthProvider>
+  );
+};
+
+const AuthController = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0c1e' }}>
+        <ActivityIndicator size="large" color="#00ffe7" />
+        <Text style={{ color: '#fff', marginTop: 10 }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {user ? (
+        // User is authenticated
+        <Stack.Screen name="Main" component={AuthenticatedApp} />
+      ) : (
+        // User is not authenticated
+        <Stack.Screen name="Login" component={LoginScreen} />
+      )}
+    </Stack.Navigator>
   );
 };
 
