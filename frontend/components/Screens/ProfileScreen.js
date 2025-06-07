@@ -50,34 +50,26 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleLogout = async () => {
-    console.log('🔍 TopHeader logout button pressed!');
-    console.log('🔍 User:', user);
-    console.log('🔍 Logout function exists:', typeof logout);
-    
     Alert.alert(
-      'Debug Info',
-      `User: ${user?.username || 'No user'}\nLogout function: ${typeof logout}`,
+      'Sign Out',
+      'Are you sure you want to sign out?',
       [
-        { text: 'Cancel' },
+        { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Continue Logout',
+          text: 'Sign Out', 
+          style: 'destructive', 
           onPress: async () => {
             try {
-              console.log('🚪 Starting logout process...');
+              console.log('🚪 ProfileScreen logout clicked');
               await logout();
-              console.log('✅ Logout completed, navigating...');
-              
-              // Force navigation
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
+              console.log('✅ ProfileScreen logout completed');
+              // No navigation needed - AuthController handles it
             } catch (error) {
-              console.error('❌ Logout error:', error);
+              console.error('❌ ProfileScreen logout failed:', error);
               Alert.alert('Error', 'Logout failed: ' + error.message);
             }
           }
-        }
+        },
       ]
     );
   };
