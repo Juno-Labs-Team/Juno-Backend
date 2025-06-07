@@ -2,19 +2,56 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 
 const NEON = '#00ffe7';
 
 const TopHeader = () => {
   const { user, logout } = useAuth();
+  const navigation = useNavigation();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: logout },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              console.log('🚪 TopHeader logout clicked');
+              
+              // Call logout from AuthContext
+              await logout();
+              
+              // Force navigation reset to login screen
+              if (Platform.OS === 'web') {
+                // For web, reload the page to clear all state
+                window.location.href = '/';
+              } else {
+                // For mobile, reset navigation stack
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              }
+            } catch (error) {
+              console.error('❌ Logout failed:', error);
+              
+              // Force logout anyway - navigate to login
+              if (Platform.OS === 'web') {
+                window.location.href = '/';
+              } else {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              }
+            }
+          }
+        },
       ]
     );
   };
@@ -36,7 +73,7 @@ const TopHeader = () => {
         {/* Right - User Info & Logout */}
         <View style={styles.rightContainer}>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.firstName || 'Lamdashi'}</Text>
+            <Text style={styles.userName}>{user?.firstName || user?.username || 'Student'}</Text>
             <Text style={styles.userRole}>Student</Text>
           </View>
           <TouchableOpacity 
@@ -67,13 +104,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    minHeight: Platform.OS === 'ios' ? 90 : 65,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingBottom: 15,
+    minHeight: Platform.OS === 'ios' ? 100 : 70,
   },
   leftSpacer: {
-    flex: 1,
+    width: 80,
   },
   centerContainer: {
     flex: 1,
@@ -82,22 +119,19 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
   appTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: 'bold',
     color: '#fff',
     textShadowColor: NEON,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-    letterSpacing: 1,
-    marginLeft: 8,
+    textShadowRadius: 10,
   },
   rightContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
     gap: 12,
   },
   userInfo: {
