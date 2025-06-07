@@ -26,28 +26,17 @@ const TopHeader = () => {
               // Call logout from AuthContext
               await logout();
               
-              // Force navigation reset to login screen
-              if (Platform.OS === 'web') {
-                // For web, reload the page to clear all state
-                window.location.href = '/';
-              } else {
-                // For mobile, reset navigation stack
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                });
-              }
+              console.log('✅ Logout completed, user state cleared');
+              
+              // No need to navigate - AuthController will handle the transition
+              // when user becomes null, it will automatically show Login screen
+              
             } catch (error) {
               console.error('❌ Logout failed:', error);
               
-              // Force logout anyway - navigate to login
+              // Force logout anyway by clearing everything
               if (Platform.OS === 'web') {
                 window.location.href = '/';
-              } else {
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                });
               }
             }
           }
