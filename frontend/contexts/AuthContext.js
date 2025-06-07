@@ -17,10 +17,34 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
 
   useEffect(() => {
     checkAuthStatus();
   }, []);
+
+  const checkIfOnboardingNeeded = (userData) => {
+    // If backend explicitly says onboarding is complete, trust it
+    if (userData.onboardingCompleted === true) {
+      return false;
+    }
+    
+    // Check for missing essential fields
+    const hasBasicInfo = userData.firstName && userData.lastName && userData.username;
+    const hasSchoolInfo = userData.school && userData.classYear;
+    
+    // Determine onboarding step
+    if (!hasBasicInfo) {
+      setOnboardingStep(1);
+      return true;
+    } else if (!hasSchoolInfo) {
+      setOnboardingStep(2);
+      return true;
+    }
+    
+    return false;
+  };
 
   const checkAuthStatus = async () => {
     try {
@@ -29,15 +53,30 @@ export const AuthProvider = ({ children }) => {
       
       if (token) {
         ApiClient.setAuthToken(token);
-        const profile = await ApiClient.getProfile();
-        console.log('✅ Profile loaded:', profile.profile.username);
-        setUser(profile.profile);
+        const response = await ApiClient.getProfile();
+        const userData = response.profile;
+        
+        console.log('✅ Profile loaded:', userData.username);
+        setUser(userData);
+
+        // Check if user needs onboarding
+        const needsOnboarding = checkIfOnboardingNeeded(userData);
+        setNeedsOnboarding(needsOnboarding);
+        
+        if (needsOnboarding) {
+          console.log('👋 User needs onboarding, step:', onboardingStep);
+        } else {
+          console.log('✅ User onboarding complete');
+          setOnboardingStep(0);
+        }
       }
     } catch (error) {
       console.log('❌ Auth check failed:', error);
       await AsyncStorage.removeItem('authToken');
       ApiClient.setAuthToken(null);
       setUser(null);
+      setNeedsOnboarding(false);
+      setOnboardingStep(0);
     } finally {
       setLoading(false);
     }
@@ -50,11 +89,23 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('authToken', token);
       ApiClient.setAuthToken(token);
       
-      const profile = await ApiClient.getProfile();
-      setUser(profile.profile);
+      const response = await ApiClient.getProfile();
+      const userData = response.profile;
+      setUser(userData);
       
-      console.log('✅ Login successful:', profile.profile.username);
-      return { success: true, user: profile.profile };
+      // Check if user needs onboarding
+      const needsOnboarding = checkIfOnboardingNeeded(userData);
+      setNeedsOnboarding(needsOnboarding);
+      
+      if (needsOnboarding) {
+        console.log('👋 New user needs onboarding, step:', onboardingStep);
+      } else {
+        console.log('✅ User onboarding complete');
+        setOnboardingStep(0);
+      }
+      
+      console.log('✅ Login successful:', userData.username);
+      return { success: true, user: userData };
     } catch (error) {
       console.error('❌ Token login failed:', error);
       await AsyncStorage.removeItem('authToken');
@@ -102,18 +153,22 @@ export const AuthProvider = ({ children }) => {
     console.log('🚪 Starting logout process...');
     
     try {
-      // Step 1: Clear local state immediately (so UI updates right away)
+      // Step 1: Clear local state immediately
       setUser(null);
+      setNeedsOnboarding(false);
+      setOnboardingStep(0);
       
-      // Step 2: Clear stored token
+      // Step 2: Clear stored data
       await AsyncStorage.removeItem('authToken');
+      await AsyncStorage.removeItem('onboardingComplete');
+      await AsyncStorage.removeItem('profileData');
       
       // Step 3: Clear API client token
       ApiClient.setAuthToken(null);
       
       console.log('✅ Local logout completed');
       
-      // Step 4: Try API logout (but don't fail the logout if this fails)
+      // Step 4: Try API logout (but don't fail if this fails)
       try {
         await ApiClient.logout();
         console.log('✅ API logout successful');
@@ -121,19 +176,13 @@ export const AuthProvider = ({ children }) => {
         console.log('⚠️ API logout failed, but user is logged out locally:', apiError.message);
       }
       
-      // Step 5: Clear any other cached data
-      try {
-        await AsyncStorage.removeItem('profileData');
-        console.log('✅ Profile data cleared');
-      } catch (error) {
-        console.log('⚠️ Could not clear profile data:', error);
-      }
-      
     } catch (error) {
       console.error('❌ Logout error:', error);
       
       // Force clear everything even if there's an error
       setUser(null);
+      setNeedsOnboarding(false);
+      setOnboardingStep(0);
       try {
         await AsyncStorage.clear();
         ApiClient.setAuthToken(null);
@@ -143,13 +192,35 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const completeOnboarding = async () => {
+    console.log('✅ Marking onboarding as complete');
+    setNeedsOnboarding(false);
+    setOnboardingStep(0);
+    
+    // Refresh user data to get updated profile
+    try {
+      const response = await ApiClient.getProfile();
+      setUser(response.profile);
+    } catch (error) {
+      console.error('Failed to refresh profile after onboarding:', error);
+    }
+  };
+
+  const updateOnboardingStep = (step) => {
+    setOnboardingStep(step);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
       login,
       loginWithToken,
-      logout,  // ← Make sure this is here!
+      logout,
       loading,
+      needsOnboarding,
+      onboardingStep,
+      completeOnboarding,
+      updateOnboardingStep,
       isAuthenticated: !!user,
     }}>
       {children}
