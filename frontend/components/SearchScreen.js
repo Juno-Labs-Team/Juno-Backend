@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'web' ? 20 : 60,
+    paddingTop: 20, // Reduced from 60 since we have top header now
     paddingBottom: 20,
   },
   title: {
