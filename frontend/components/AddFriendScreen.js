@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'web' ? 20 : 40,
+    paddingTop: 20, // Reduced from 40 since we have top header now
     paddingBottom: 30,
   },
   backButton: {
