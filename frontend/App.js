@@ -15,6 +15,7 @@ import AddFriendScreen from './components/AddFriendScreen';
 import HomeScreen from './components/HomeScreen';
 import ProfileScreen from './components/Screens/ProfileScreen';
 import EditProfileScreen from './components/Screens/EditProfileScreen';
+import CreateRideScreen from './components/CreateRideScreen';
 import TopHeader from './components/TopHeader';
 
 const Stack = createStackNavigator();
@@ -27,6 +28,17 @@ const SearchStack = () => (
     <Stack.Screen 
       name="AddFriend" 
       component={AddFriendScreen}
+      options={{ presentation: 'modal' }}
+    />
+  </Stack.Navigator>
+);
+
+const HomeStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="HomeMain" component={HomeScreen} />
+    <Stack.Screen 
+      name="CreateRide" 
+      component={CreateRideScreen}
       options={{ presentation: 'modal' }}
     />
   </Stack.Navigator>
@@ -55,7 +67,7 @@ const TabNavigator = () => {
           if (route.name === 'Search') {
             iconName = focused ? 'search' : 'search-outline';
           } else if (route.name === 'Home') {
-            iconName = focused ? 'car' : 'car-outline'; // Changed from home to car
+            iconName = focused ? 'car' : 'car-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person-circle' : 'person-circle-outline';
           }
@@ -109,7 +121,7 @@ const TabNavigator = () => {
       />
       <Tab.Screen 
         name="Home" 
-        component={HomeScreen}
+        component={HomeStack}
         options={{ title: 'Rides' }}
       />
       <Tab.Screen 
