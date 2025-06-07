@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -49,15 +50,36 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Login' }],
-      });
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+    console.log('🔍 TopHeader logout button pressed!');
+    console.log('🔍 User:', user);
+    console.log('🔍 Logout function exists:', typeof logout);
+    
+    Alert.alert(
+      'Debug Info',
+      `User: ${user?.username || 'No user'}\nLogout function: ${typeof logout}`,
+      [
+        { text: 'Cancel' },
+        { 
+          text: 'Continue Logout',
+          onPress: async () => {
+            try {
+              console.log('🚪 Starting logout process...');
+              await logout();
+              console.log('✅ Logout completed, navigating...');
+              
+              // Force navigation
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            } catch (error) {
+              console.error('❌ Logout error:', error);
+              Alert.alert('Error', 'Logout failed: ' + error.message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const badgeData = [
