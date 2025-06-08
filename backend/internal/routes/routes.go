@@ -55,10 +55,11 @@ func SetupRoutes(cfg *configs.Config) *gin.Engine {
 	// Protected routes
 	protected := r.Group("/api")
 	protected.Use(auth.JWTAuthMiddleware())
-	{
-		// Profile routes
+	{		// Profile routes
 		protected.GET("/profile", handlers.HandleGetProfile)
-		protected.PUT("/profile", handlers.HandleUpdateProfile)		// Friends routes
+		protected.PUT("/profile", handlers.HandleUpdateProfile)
+		
+		// Friends routes
 		protected.GET("/friends", handlers.HandleGetFriends)
 		protected.GET("/friends/requests", handlers.HandleGetFriendRequests)
 		protected.POST("/friends/request/:friendId", handlers.HandleSendFriendRequest)
