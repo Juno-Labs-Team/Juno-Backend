@@ -89,6 +89,110 @@ func HandleAcceptFriendRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Friend request accepted"})
 }
 
+// Accept friend request (alternative endpoint for backward compatibility)
+func HandleAcceptFriend(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	friendID, err := strconv.Atoi(c.Param("friendId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid friend ID"})
+		return
+	}
+
+	// Update friendship status to accepted where the current user is the friend_id (requestee)
+	result, err := database.DB.Exec(`
+        UPDATE friendships 
+        SET status = 'accepted' 
+        WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
+		friendID, userID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to accept friend request"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Friend request not found or already processed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Friend request accepted successfully"})
+}
+
+// Reject friend request
+func HandleRejectFriend(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	friendID, err := strconv.Atoi(c.Param("friendId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid friend ID"})
+		return
+	}
+
+	// Delete the friendship request where the current user is the friend_id (requestee)
+	result, err := database.DB.Exec(`
+        DELETE FROM friendships 
+        WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
+		friendID, userID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reject friend request"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Friend request not found or already processed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Friend request rejected successfully"})
+}
+
+// Remove friend (delete existing friendship)
+func HandleRemoveFriend(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	friendID, err := strconv.Atoi(c.Param("friendId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid friend ID"})
+		return
+	}
+
+	// Delete the friendship (works both ways)
+	result, err := database.DB.Exec(`
+        DELETE FROM friendships 
+        WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)) 
+        AND status = 'accepted'`,
+		userID, friendID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove friend"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Friendship not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Friend removed successfully"})
+}
+
 // Get friends list
 func HandleGetFriends(c *gin.Context) {
 	userID, exists := c.Get("userID")
