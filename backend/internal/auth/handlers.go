@@ -63,6 +63,90 @@ func HandleGoogleLogin(c *gin.Context) {
 }
 
 func HandleGoogleCallback(c *gin.Context) {
+	// Add nil checks at the start
+	if googleOauthConfig == nil {
+		log.Printf("❌ Google OAuth config is nil - not initialized")
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Configuration Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Configuration Error</h2>
+						<p>OAuth configuration is not initialized. Please contact support.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
+		return
+	}
+
+	// Check database connection
+	if database.DB == nil {
+		log.Printf("❌ Database connection is nil")
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Database Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Database Error</h2>
+						<p>Database connection is not available. Please try again later.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
+		return
+	}
+
+	// Check JWT secret
+	if jwtSecret == "" {
+		log.Printf("❌ JWT secret is empty")
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Configuration Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Configuration Error</h2>
+						<p>JWT configuration is missing. Please contact support.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
+		return
+	}
+
 	code := c.Query("code")
 	if code == "" {
 		log.Printf("❌ No authorization code received")
