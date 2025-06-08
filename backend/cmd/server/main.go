@@ -5,42 +5,19 @@ import (
 	"juno-backend/internal/database"
 	"juno-backend/internal/routes"
 	"log"
-	"os"
-
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	// Load config
 	cfg := configs.Load()
 
-	// Set Gin mode based on environment
-	if os.Getenv("GIN_MODE") == "release" {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
-	r := gin.Default()
-
-	// CORS configuration - allow your frontend domains
-	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:8080",    // Local backend testing
-			"http://localhost:19006",   // Expo dev server
-			"https://juno-backend-6eamg.ondigitalocean.app", // Your backend
-			"exp://*",                  // Expo mobile dev
-			"*",                        // Temporary for testing - remove in production
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}))
-
 	// Initialize database
+	log.Printf("🔌 Initializing database...")
 	database.InitDB(cfg)
 
-	// Setup routes
-	routes.SetupRoutes(r, cfg)
+	// Setup routes (this now includes CORS and OAuth initialization)
+	log.Printf("🛣️ Setting up routes...")
+	r := routes.SetupRoutes(cfg)
 
 	// Start server
 	port := cfg.Port
@@ -49,6 +26,6 @@ func main() {
 	}
 
 	log.Printf("🚀 Server running on port %s", port)
-	log.Printf("🔗 Google OAuth: http://localhost:%s/auth/google", port)
+	log.Printf("🔗 Google OAuth: https://juno-backend-6eamg.ondigitalocean.app/auth/google")
 	r.Run(":" + port)
 }
