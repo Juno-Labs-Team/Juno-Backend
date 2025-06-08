@@ -75,6 +75,11 @@ func HandleGoogleLogin(c *gin.Context) {
 }
 
 func HandleGoogleCallback(c *gin.Context) {
+	log.Printf("🔍 Starting Google callback...")
+	log.Printf("🔍 JWT Secret exists: %t", jwtSecret != "")
+	log.Printf("🔍 DB connection exists: %t", database.DB != nil)
+	log.Printf("🔍 OAuth config exists: %t", googleOauthConfig != nil)
+
 	// Add nil checks at the start
 	if googleOauthConfig == nil {
 		log.Printf("❌ Google OAuth config is nil - not initialized")
