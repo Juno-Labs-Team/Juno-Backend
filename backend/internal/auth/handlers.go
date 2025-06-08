@@ -65,7 +65,7 @@ func HandleGoogleLogin(c *gin.Context) {
 func HandleGoogleCallback(c *gin.Context) {
 	code := c.Query("code")
 	if code == "" {
-		// Redirect to frontend with error
+		log.Printf("❌ No authorization code received")
 		c.HTML(http.StatusBadRequest, "", `
 			<!DOCTYPE html>
 			<html>
@@ -91,8 +91,11 @@ func HandleGoogleCallback(c *gin.Context) {
 		return
 	}
 
+	log.Printf("🔑 Received authorization code, exchanging for token...")
+
 	token, err := googleOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
+		log.Printf("❌ Token exchange failed: %v", err)
 		c.HTML(http.StatusInternalServerError, "", `
 			<!DOCTYPE html>
 			<html>
@@ -110,6 +113,7 @@ func HandleGoogleCallback(c *gin.Context) {
 					<div class="error">
 						<h2>Login Error</h2>
 						<p>Failed to exchange authorization code. Please try again.</p>
+						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
 					</div>
 				</div>
 			</body>
@@ -118,9 +122,12 @@ func HandleGoogleCallback(c *gin.Context) {
 		return
 	}
 
+	log.Printf("✅ Token exchange successful")
+
 	client := googleOauthConfig.Client(context.Background(), token)
 	userInfoResp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
+		log.Printf("❌ Failed to get user info: %v", err)
 		c.HTML(http.StatusInternalServerError, "", `
 			<!DOCTYPE html>
 			<html>
@@ -138,6 +145,7 @@ func HandleGoogleCallback(c *gin.Context) {
 					<div class="error">
 						<h2>Login Error</h2>
 						<p>Failed to get user information. Please try again.</p>
+						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
 					</div>
 				</div>
 			</body>
@@ -147,8 +155,11 @@ func HandleGoogleCallback(c *gin.Context) {
 	}
 	defer userInfoResp.Body.Close()
 
+	log.Printf("✅ User info response received")
+
 	var googleUser GoogleUserInfo
 	if err := json.NewDecoder(userInfoResp.Body).Decode(&googleUser); err != nil {
+		log.Printf("❌ Failed to decode user info: %v", err)
 		c.HTML(http.StatusInternalServerError, "", `
 			<!DOCTYPE html>
 			<html>
@@ -166,6 +177,37 @@ func HandleGoogleCallback(c *gin.Context) {
 					<div class="error">
 						<h2>Login Error</h2>
 						<p>Failed to decode user information. Please try again.</p>
+						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
+		return
+	}
+
+	log.Printf("✅ Google user info decoded: %s (%s)", googleUser.Email, googleUser.Name)
+
+	// Check database connection
+	if database.DB == nil {
+		log.Printf("❌ Database connection is nil")
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Login Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Database Error</h2>
+						<p>Database connection is not available. Please try again later.</p>
 					</div>
 				</div>
 			</body>
@@ -180,6 +222,8 @@ func HandleGoogleCallback(c *gin.Context) {
 	err = database.DB.QueryRow("SELECT id, username FROM users WHERE email = $1", googleUser.Email).Scan(&userID, &username)
 
 	if err != nil {
+		log.Printf("🆕 Creating new user for email: %s", googleUser.Email)
+
 		// User doesn't exist, create new user
 		username = strings.Split(googleUser.Email, "@")[0]
 
@@ -197,6 +241,8 @@ func HandleGoogleCallback(c *gin.Context) {
 			counter++
 		}
 
+		log.Printf("🔤 Using username: %s", username)
+
 		err = database.DB.QueryRow(`
             INSERT INTO users (username, email, google_id, first_name, last_name, profile_picture_url, password_hash) 
             VALUES ($1, $2, $3, $4, $5, $6, 'google_oauth') 
@@ -204,7 +250,7 @@ func HandleGoogleCallback(c *gin.Context) {
 			username, googleUser.Email, googleUser.ID, googleUser.Given, googleUser.Family, googleUser.Picture).Scan(&userID)
 
 		if err != nil {
-			log.Printf("Error creating user: %v", err)
+			log.Printf("❌ Error creating user: %v", err)
 			c.HTML(http.StatusInternalServerError, "", `
                 <!DOCTYPE html>
                 <html>
@@ -220,8 +266,9 @@ func HandleGoogleCallback(c *gin.Context) {
                     <div class="container">
                         <h1>🚗 Juno</h1>
                         <div class="error">
-                            <h2>Login Error</h2>
+                            <h2>Database Error</h2>
                             <p>Failed to create user account. Please try again.</p>
+                            <p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
                         </div>
                     </div>
                 </body>
@@ -231,9 +278,38 @@ func HandleGoogleCallback(c *gin.Context) {
 		}
 
 		log.Printf("✅ Created new user: %s (ID: %d)", username, userID)
+	} else {
+		log.Printf("✅ Found existing user: %s (ID: %d)", username, userID)
 	}
 
 	// Generate JWT token
+	if jwtSecret == "" {
+		log.Printf("❌ JWT secret is not set")
+		c.HTML(http.StatusInternalServerError, "", `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Configuration Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Configuration Error</h2>
+						<p>Server configuration is incomplete. Please contact support.</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
+		return
+	}
+
 	claims := &Claims{
 		UserID: userID,
 		Email:  googleUser.Email,
@@ -245,30 +321,34 @@ func HandleGoogleCallback(c *gin.Context) {
 
 	tokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(jwtSecret))
 	if err != nil {
+		log.Printf("❌ Failed to generate JWT: %v", err)
 		c.HTML(http.StatusInternalServerError, "", `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Juno - Login Error</title>
-                <style>
-                    body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-                    .container { max-width: 600px; margin: 0 auto; }
-                    .error { color: #ff6b6b; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🚗 Juno</h1>
-                    <div class="error">
-                        <h2>Login Error</h2>
-                        <p>Failed to generate authentication token. Please try again.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-        `)
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>Juno - Login Error</title>
+				<style>
+					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
+					.container { max-width: 600px; margin: 0 auto; }
+					.error { color: #ff6b6b; }
+				</style>
+			</head>
+			<body>
+				<div class="container">
+					<h1>🚗 Juno</h1>
+					<div class="error">
+						<h2>Login Error</h2>
+						<p>Failed to generate authentication token. Please try again.</p>
+						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`)
 		return
 	}
+
+	log.Printf("✅ JWT generated successfully for user %s", username)
 
 	// Return success page with token that user can copy
 	c.HTML(http.StatusOK, "", fmt.Sprintf(`
