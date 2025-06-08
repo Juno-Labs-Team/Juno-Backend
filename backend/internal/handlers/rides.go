@@ -292,3 +292,135 @@ func HandleGetNearbyRides(c *gin.Context) {
 		"rides":   rides,
 	})
 }
+
+// Get ride details
+func HandleGetRideDetails(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	rideIDStr := c.Param("rideId")
+	rideID, err := strconv.Atoi(rideIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ride ID"})
+		return
+	}
+
+	var ride map[string]interface{} = make(map[string]interface{})
+	var id, driverID, availableSeats int
+	var origin, destination, status, driverUsername string
+	var departureTime string
+	var price float64
+
+	err = database.DB.QueryRow(`
+		SELECT r.id, r.driver_id, r.origin, r.destination, r.departure_time, 
+		       r.available_seats, r.price, r.status, u.username 
+		FROM rides r
+		JOIN users u ON r.driver_id = u.id
+		WHERE r.id = $1
+	`, rideID).Scan(&id, &driverID, &origin, &destination, &departureTime, 
+		&availableSeats, &price, &status, &driverUsername)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ride not found"})
+		return
+	}
+
+	ride["id"] = id
+	ride["driverId"] = driverID
+	ride["driverUsername"] = driverUsername
+	ride["origin"] = origin
+	ride["destination"] = destination
+	ride["departureTime"] = departureTime
+	ride["availableSeats"] = availableSeats
+	ride["price"] = price
+	ride["status"] = status
+	ride["isDriver"] = driverID == userID.(int)
+	// Check if user is a passenger
+	var passengerExists int
+	database.DB.QueryRow("SELECT COUNT(*) FROM ride_participants WHERE ride_id = $1 AND user_id = $2", 
+		rideID, userID).Scan(&passengerExists)
+	ride["isPassenger"] = passengerExists > 0
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Ride details retrieved successfully",
+		"ride":    ride,
+	})
+}
+
+// Leave a ride
+func HandleLeaveRide(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	rideIDStr := c.Param("rideId")
+	rideID, err := strconv.Atoi(rideIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ride ID"})
+		return
+	}
+
+	// Remove user from ride participants
+	result, err := database.DB.Exec("DELETE FROM ride_participants WHERE ride_id = $1 AND user_id = $2", 
+		rideID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to leave ride"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "You are not a participant in this ride"})
+		return
+	}
+
+	// Update available seats
+	_, err = database.DB.Exec("UPDATE rides SET available_seats = available_seats + 1 WHERE id = $1", rideID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update ride capacity"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully left the ride",
+	})
+}
+
+// Cancel a ride (driver only)
+func HandleCancelRide(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	rideIDStr := c.Param("rideId")
+	rideID, err := strconv.Atoi(rideIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ride ID"})
+		return
+	}
+
+	// Update ride status to cancelled (only if user is the driver)
+	result, err := database.DB.Exec("UPDATE rides SET status = 'cancelled' WHERE id = $1 AND driver_id = $2", 
+		rideID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel ride"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only cancel your own rides"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Ride cancelled successfully",
+	})
+}
