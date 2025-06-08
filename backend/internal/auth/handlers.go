@@ -38,6 +38,17 @@ var (
 )
 
 func InitOAuth(cfg *configs.Config) {
+	// Validate required config
+	if cfg.GoogleClientID == "" {
+		log.Fatal("❌ GOOGLE_CLIENT_ID is required")
+	}
+	if cfg.GoogleClientSecret == "" {
+		log.Fatal("❌ GOOGLE_CLIENT_SECRET is required")
+	}
+	if cfg.JWTSecret == "" {
+		log.Fatal("❌ JWT_SECRET is required")
+	}
+
 	redirectURL := "http://localhost:" + cfg.Port + "/auth/google/callback"
 
 	// For production, use the Digital Ocean URL
@@ -54,6 +65,7 @@ func InitOAuth(cfg *configs.Config) {
 	}
 	jwtSecret = cfg.JWTSecret
 
+	log.Printf("✅ OAuth configured successfully")
 	log.Printf("🔗 OAuth Redirect URL: %s", redirectURL)
 }
 
