@@ -320,7 +320,7 @@ func HandleGetRideDetails(c *gin.Context) {
 		FROM rides r
 		JOIN users u ON r.driver_id = u.id
 		WHERE r.id = $1
-	`, rideID).Scan(&id, &driverID, &origin, &destination, &departureTime, 
+	`, rideID).Scan(&id, &driverID, &origin, &destination, &departureTime,
 		&availableSeats, &price, &status, &driverUsername)
 
 	if err != nil {
@@ -340,7 +340,7 @@ func HandleGetRideDetails(c *gin.Context) {
 	ride["isDriver"] = driverID == userID.(int)
 	// Check if user is a passenger
 	var passengerExists int
-	database.DB.QueryRow("SELECT COUNT(*) FROM ride_participants WHERE ride_id = $1 AND user_id = $2", 
+	database.DB.QueryRow("SELECT COUNT(*) FROM ride_participants WHERE ride_id = $1 AND user_id = $2",
 		rideID, userID).Scan(&passengerExists)
 	ride["isPassenger"] = passengerExists > 0
 
@@ -366,7 +366,7 @@ func HandleLeaveRide(c *gin.Context) {
 	}
 
 	// Remove user from ride participants
-	result, err := database.DB.Exec("DELETE FROM ride_participants WHERE ride_id = $1 AND user_id = $2", 
+	result, err := database.DB.Exec("DELETE FROM ride_participants WHERE ride_id = $1 AND user_id = $2",
 		rideID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to leave ride"})
@@ -407,7 +407,7 @@ func HandleCancelRide(c *gin.Context) {
 	}
 
 	// Update ride status to cancelled (only if user is the driver)
-	result, err := database.DB.Exec("UPDATE rides SET status = 'cancelled' WHERE id = $1 AND driver_id = $2", 
+	result, err := database.DB.Exec("UPDATE rides SET status = 'cancelled' WHERE id = $1 AND driver_id = $2",
 		rideID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel ride"})
