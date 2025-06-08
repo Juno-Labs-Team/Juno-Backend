@@ -58,12 +58,10 @@ func SetupRoutes(cfg *configs.Config) *gin.Engine {
 	{
 		// Profile routes
 		protected.GET("/profile", handlers.HandleGetProfile)
-		protected.PUT("/profile", handlers.HandleUpdateProfile)
-		// Friends routes
+		protected.PUT("/profile", handlers.HandleUpdateProfile)		// Friends routes
 		protected.GET("/friends", handlers.HandleGetFriends)
 		protected.GET("/friends/requests", handlers.HandleGetFriendRequests)
 		protected.POST("/friends/request/:friendId", handlers.HandleSendFriendRequest)
-		protected.POST("/friends/accept/:friendshipId", handlers.HandleAcceptFriendRequest)
 		protected.POST("/friends/accept/:friendId", handlers.HandleAcceptFriend)
 		protected.POST("/friends/reject/:friendId", handlers.HandleRejectFriend)
 		protected.DELETE("/friends/:friendId", handlers.HandleRemoveFriend)
