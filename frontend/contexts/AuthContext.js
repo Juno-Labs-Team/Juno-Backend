@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async () => {
     try {
-      const authUrl = 'https://juno-backend-6eamg.ondigitalocean.app/auth/google';
+      const authUrl = 'https://juno-backend-587837548118.us-east4.run.app/auth/google';
       
       if (Platform.OS === 'web') {
         window.open(authUrl, '_blank');
