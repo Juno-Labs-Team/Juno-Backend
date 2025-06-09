@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"juno-backend/configs"
 	"juno-backend/internal/database"
 	"log"
@@ -82,258 +83,118 @@ func HandleGoogleLogin(c *gin.Context) {
 }
 
 func HandleGoogleCallback(c *gin.Context) {
-	log.Printf("🔍 Starting Google callback...")
-	log.Printf("🔍 JWT Secret exists: %t", jwtSecret != "")
-	log.Printf("🔍 DB connection exists: %t", database.DB != nil)
-	log.Printf("🔍 OAuth config exists: %t", googleOauthConfig != nil)
+	log.Printf("🔵 OAuth callback received")
 
-	// Add nil checks at the start
+	// Get the authorization code from the callback
+	code := c.Query("code")
+	if code == "" {
+		log.Printf("❌ No authorization code received")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No authorization code received"})
+		return
+	}
+
+	// Check if OAuth config is initialized
 	if googleOauthConfig == nil {
-		log.Printf("❌ Google OAuth config is nil - not initialized")
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Configuration Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Configuration Error</h2>
-						<p>OAuth configuration is not initialized. Please contact support.</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
+		log.Printf("❌ OAuth config is nil")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OAuth not configured"})
+		return
+	}
+
+	// Exchange code for token
+	token, err := googleOauthConfig.Exchange(context.Background(), code)
+	if err != nil {
+		log.Printf("❌ Failed to exchange code for token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange code for token"})
+		return
+	}
+
+	// Check if token is valid
+	if token == nil {
+		log.Printf("❌ Received nil token from OAuth exchange")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid token received"})
+		return
+	}
+
+	// Create HTTP client with token
+	client := googleOauthConfig.Client(context.Background(), token)
+	if client == nil {
+		log.Printf("❌ Failed to create OAuth client")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create OAuth client"})
+		return
+	}
+
+	// Get user info from Google
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	if err != nil {
+		log.Printf("❌ Failed to get user info: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
+		return
+	}
+
+	// Critical nil check that was missing
+	if resp == nil {
+		log.Printf("❌ Received nil response from Google API")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response from Google"})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check if response body is valid
+	if resp.Body == nil {
+		log.Printf("❌ Response body is nil")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response body"})
+		return
+	}
+
+	var userInfo struct {
+		ID            string `json:"id"`
+		Email         string `json:"email"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
+		GivenName     string `json:"given_name"`
+		FamilyName    string `json:"family_name"`
+		VerifiedEmail bool   `json:"verified_email"`
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("❌ Failed to read response body: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read user info"})
+		return
+	}
+
+	if err := json.Unmarshal(body, &userInfo); err != nil {
+		log.Printf("❌ Failed to parse user info: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse user info"})
+		return
+	}
+
+	// Validate required fields
+	if userInfo.Email == "" || userInfo.ID == "" {
+		log.Printf("❌ Missing required user info fields")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required user information"})
 		return
 	}
 
 	// Check database connection
 	if database.DB == nil {
 		log.Printf("❌ Database connection is nil")
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Database Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Database Error</h2>
-						<p>Database connection is not available. Please try again later.</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
 		return
 	}
 
-	// Check JWT secret
-	if jwtSecret == "" {
-		log.Printf("❌ JWT secret is empty")
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Configuration Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Configuration Error</h2>
-						<p>JWT configuration is missing. Please contact support.</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
-
-	code := c.Query("code")
-	if code == "" {
-		log.Printf("❌ No authorization code received")
-		c.HTML(http.StatusBadRequest, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Login Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Login Error</h2>
-						<p>Authorization code not found. Please try again.</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
-
-	log.Printf("🔑 Received authorization code, exchanging for token...")
-
-	token, err := googleOauthConfig.Exchange(context.Background(), code)
-	if err != nil {
-		log.Printf("❌ Token exchange failed: %v", err)
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Login Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Login Error</h2>
-						<p>Failed to exchange authorization code. Please try again.</p>
-						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
-
-	log.Printf("✅ Token exchange successful")
-
-	client := googleOauthConfig.Client(context.Background(), token)
-	userInfoResp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil {
-		log.Printf("❌ Failed to get user info: %v", err)
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Login Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Login Error</h2>
-						<p>Failed to get user information. Please try again.</p>
-						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
-	defer userInfoResp.Body.Close()
-
-	log.Printf("✅ User info response received")
-
-	var googleUser GoogleUserInfo
-	if err := json.NewDecoder(userInfoResp.Body).Decode(&googleUser); err != nil {
-		log.Printf("❌ Failed to decode user info: %v", err)
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Login Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Login Error</h2>
-						<p>Failed to decode user information. Please try again.</p>
-						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
-
-	log.Printf("✅ Google user info decoded: %s (%s)", googleUser.Email, googleUser.Name)
-
-	// Check database connection again before using it
-	if database.DB == nil {
-		log.Printf("❌ Database connection is nil")
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Login Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Database Error</h2>
-						<p>Database connection is not available. Please try again later.</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
+	log.Printf("✅ User info received: %s (%s)", userInfo.Email, userInfo.Name)
 
 	// Check if user exists or create new user
 	var userID int
 	var username string
-	err = database.DB.QueryRow("SELECT id, username FROM users WHERE email = $1", googleUser.Email).Scan(&userID, &username)
+	err = database.DB.QueryRow("SELECT id, username FROM users WHERE email = $1", userInfo.Email).Scan(&userID, &username)
 
 	if err != nil {
-		log.Printf("🆕 Creating new user for email: %s", googleUser.Email)
+		log.Printf("🆕 Creating new user for email: %s", userInfo.Email)
 
 		// User doesn't exist, create new user
-		username = strings.Split(googleUser.Email, "@")[0]
+		username = strings.Split(userInfo.Email, "@")[0]
 
 		// Ensure unique username
 		originalUsername := username
@@ -355,7 +216,7 @@ func HandleGoogleCallback(c *gin.Context) {
             INSERT INTO users (username, email, google_id, first_name, last_name, profile_picture_url, password_hash) 
             VALUES ($1, $2, $3, $4, $5, $6, 'google_oauth') 
             RETURNING id`,
-			username, googleUser.Email, googleUser.ID, googleUser.Given, googleUser.Family, googleUser.Picture).Scan(&userID)
+			username, userInfo.Email, userInfo.ID, userInfo.GivenName, userInfo.FamilyName, userInfo.Picture).Scan(&userID)
 
 		if err != nil {
 			log.Printf("❌ Error creating user: %v", err)
@@ -420,7 +281,7 @@ func HandleGoogleCallback(c *gin.Context) {
 
 	claims := &Claims{
 		UserID: userID,
-		Email:  googleUser.Email,
+		Email:  userInfo.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour * 7)), // 7 days
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -459,9 +320,9 @@ func HandleGoogleCallback(c *gin.Context) {
 	log.Printf("✅ JWT generated successfully for user %s", username)
 
 	// Safe username display - use email if Given name is empty
-	displayName := googleUser.Given
+	displayName := userInfo.GivenName
 	if displayName == "" {
-		displayName = strings.Split(googleUser.Email, "@")[0]
+		displayName = strings.Split(userInfo.Email, "@")[0]
 	}
 
 	// Return success page with token that user can copy
