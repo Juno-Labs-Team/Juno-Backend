@@ -15,12 +15,12 @@ const API_BASE_URL = (() => {
     if (hostname.includes('ondigitalocean.app') || 
         hostname.includes('juno-frontend') ||
         hostname !== 'localhost') {
-      return 'https://juno-backend-6eamg.ondigitalocean.app';
+      return 'https://juno-backend-587837548118.us-east4.run.app'; // Updated to Google Cloud Run
     }
   }
   
-  // Default to production API
-  return 'https://juno-backend-6eamg.ondigitalocean.app';
+  // Default to Google Cloud Run API
+  return 'https://juno-backend-587837548118.us-east4.run.app';
 })();
 
 console.log('🌐 Frontend API Base URL:', API_BASE_URL);
