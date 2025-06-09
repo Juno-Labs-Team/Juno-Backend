@@ -1,33 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Production-ready API URL detection
-const API_BASE_URL = (() => {
-  // Check for environment variable first (production)
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  
-  // Web browser detection
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    
-    // Production domains
-    if (hostname.includes('ondigitalocean.app') || 
-        hostname.includes('juno-frontend') ||
-        hostname !== 'localhost') {
-      return 'https://juno-backend-587837548118.us-east4.run.app'; // Updated to Google Cloud Run
-    }
-  }
-  
-  // Default to Google Cloud Run API
-  return 'https://juno-backend-587837548118.us-east4.run.app';
-})();
+const API_BASE_URL = 'https://juno-backend-587837548118.us-east4.run.app';
 
 console.log('🌐 Frontend API Base URL:', API_BASE_URL);
 
 class ApiClient {
   constructor() {
-    this.baseURL = API_BASE_URL;
+    this.baseURL = 'https://juno-backend-587837548118.us-east4.run.app';
     this.authToken = null;
   }
 

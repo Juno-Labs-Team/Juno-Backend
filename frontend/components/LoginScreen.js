@@ -7,9 +7,11 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import * as WebBrowser from 'expo-web-browser';
 
 const NEON = '#00ffe7';
 
@@ -22,18 +24,17 @@ const LoginScreen = ({ navigation }) => {
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      const result = await login();
+      // Update this URL to your new backend
+      const authUrl = 'https://juno-backend-587837548118.us-east4.run.app/auth/google';
       
-      if (result.success) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Main' }], // Changed from 'Home' to 'Main'
-        });
+      if (Platform.OS === 'web') {
+        window.location.href = authUrl;
       } else {
-        Alert.alert('Login Instructions', result.message || 'Please copy the JWT token from the browser and paste it in dev mode.');
+        // For mobile, use WebBrowser
+        const result = await WebBrowser.openAuthSessionAsync(authUrl, 'your-app-scheme://');
+        // Handle the result
       }
     } catch (error) {
-      Alert.alert('Login Failed', 'Unable to sign in. Please try again.');
       console.error('Login error:', error);
     } finally {
       setLoading(false);

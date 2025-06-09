@@ -51,6 +51,7 @@ func InitOAuth(cfg *configs.Config) {
 		log.Fatal("❌ JWT_SECRET is required")
 	}
 
+	// Default to localhost for development
 	redirectURL := "http://localhost:" + cfg.Port + "/auth/google/callback"
 
 	// Check for Google Cloud Run environment
@@ -58,9 +59,9 @@ func InitOAuth(cfg *configs.Config) {
 		// Running on Cloud Run - use the service URL
 		redirectURL = os.Getenv("OAUTH_REDIRECT_URL")
 		if redirectURL == "" {
-			// Fallback - you'll need to set this after deployment
-			log.Printf("⚠️ OAUTH_REDIRECT_URL not set, using fallback")
-			redirectURL = "https://juno-backend-REPLACE-ME.run.app/auth/google/callback"
+			// Use the known Cloud Run URL from the chat history
+			redirectURL = "https://juno-backend-587837548118.us-east4.run.app/auth/google/callback"
+			log.Printf("⚠️ Using fallback Cloud Run URL")
 		}
 	}
 
@@ -179,7 +180,36 @@ func HandleGoogleCallback(c *gin.Context) {
 	// Check database connection
 	if database.DB == nil {
 		log.Printf("❌ Database connection is nil")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
+		c.HTML(http.StatusInternalServerError, "", `
+            <!DOCTYPE html>
+            <html>
+            <head><title>Database Error</title></head>
+            <body style="font-family: Arial; background: #0a0c1e; color: white; text-align: center; padding: 50px;">
+                <h1>🚗 Juno</h1>
+                <h2 style="color: #ff6b6b;">Database Connection Error</h2>
+                <p>The database is not connected. Please try again in a moment.</p>
+                <a href="/auth/google" style="color: #00ffe7;">Try Again</a>
+            </body>
+            </html>
+        `)
+		return
+	}
+
+	// Test database connection
+	if err := database.DB.Ping(); err != nil {
+		log.Printf("❌ Database ping failed: %v", err)
+		c.HTML(http.StatusInternalServerError, "", `
+            <!DOCTYPE html>
+            <html>
+            <head><title>Database Error</title></head>
+            <body style="font-family: Arial; background: #0a0c1e; color: white; text-align: center; padding: 50px;">
+                <h1>🚗 Juno</h1>
+                <h2 style="color: #ff6b6b;">Database Connection Error</h2>
+                <p>Cannot connect to database. Please try again.</p>
+                <a href="/auth/google" style="color: #00ffe7;">Try Again</a>
+            </body>
+            </html>
+        `)
 		return
 	}
 
