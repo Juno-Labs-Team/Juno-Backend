@@ -18,13 +18,13 @@ func SetupRoutes(cfg *configs.Config) *gin.Engine {
 	}
 
 	r := gin.Default()
-
 	// CORS configuration
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
 			"http://localhost:8080",
 			"http://localhost:19006",
-			"https://juno-backend-6eamg.ondigitalocean.app",
+			"https://juno-backend-6eamg.ondigitalocean.app", // Keep old DigitalOcean backend URL
+			"https://your-frontend-app.ondigitalocean.app",  // Your DigitalOcean frontend URL
 			"exp://*",
 			"*",
 		},

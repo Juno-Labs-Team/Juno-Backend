@@ -5,6 +5,7 @@ import (
 	"juno-backend/internal/database"
 	"juno-backend/internal/routes"
 	"log"
+	"os"
 )
 
 func main() {
@@ -19,13 +20,24 @@ func main() {
 	log.Printf("🛣️ Setting up routes...")
 	r := routes.SetupRoutes(cfg)
 
-	// Start server
-	port := cfg.Port
+	// Determine port
+	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080" // Digital Ocean default
+		port = cfg.Port
+		if port == "" {
+			port = "8080"
+		}
 	}
 
 	log.Printf("🚀 Server running on port %s", port)
-	log.Printf("🔗 Google OAuth: https://juno-backend-6eamg.ondigitalocean.app/auth/google")
+
+	// Log different URLs based on environment
+	if os.Getenv("K_SERVICE") != "" {
+		log.Printf("🌐 Running on Google Cloud Run")
+		log.Printf("🔗 OAuth URL: https://[your-service-url]/auth/google")
+	} else {
+		log.Printf("🔗 OAuth URL: http://localhost:%s/auth/google", port)
+	}
+
 	r.Run(":" + port)
 }

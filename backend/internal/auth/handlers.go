@@ -8,6 +8,7 @@ import (
 	"juno-backend/internal/database"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -51,9 +52,15 @@ func InitOAuth(cfg *configs.Config) {
 
 	redirectURL := "http://localhost:" + cfg.Port + "/auth/google/callback"
 
-	// For production, use the Digital Ocean URL
-	if cfg.Port == "8080" {
-		redirectURL = "https://juno-backend-6eamg.ondigitalocean.app/auth/google/callback"
+	// Check for Google Cloud Run environment
+	if os.Getenv("K_SERVICE") != "" {
+		// Running on Cloud Run - use the service URL
+		redirectURL = os.Getenv("OAUTH_REDIRECT_URL")
+		if redirectURL == "" {
+			// Fallback - you'll need to set this after deployment
+			log.Printf("⚠️ OAUTH_REDIRECT_URL not set, using fallback")
+			redirectURL = "https://juno-backend-REPLACE-ME.run.app/auth/google/callback"
+		}
 	}
 
 	googleOauthConfig = &oauth2.Config{
