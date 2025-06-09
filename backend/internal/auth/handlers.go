@@ -296,7 +296,7 @@ func HandleGoogleCallback(c *gin.Context) {
 
 	log.Printf("✅ Google user info decoded: %s (%s)", googleUser.Email, googleUser.Name)
 
-	// Check database connection
+	// Check database connection again before using it
 	if database.DB == nil {
 		log.Printf("❌ Database connection is nil")
 		c.HTML(http.StatusInternalServerError, "", `
@@ -458,6 +458,12 @@ func HandleGoogleCallback(c *gin.Context) {
 
 	log.Printf("✅ JWT generated successfully for user %s", username)
 
+	// Safe username display - use email if Given name is empty
+	displayName := googleUser.Given
+	if displayName == "" {
+		displayName = strings.Split(googleUser.Email, "@")[0]
+	}
+
 	// Return success page with token that user can copy
 	c.HTML(http.StatusOK, "", fmt.Sprintf(`
 		<!DOCTYPE html>
@@ -591,7 +597,7 @@ func HandleGoogleCallback(c *gin.Context) {
 			</script>
 		</body>
 		</html>
-	`, googleUser.Given, tokenString))
+	`, displayName, tokenString))
 }
 
 func HandleLogout(c *gin.Context) {
