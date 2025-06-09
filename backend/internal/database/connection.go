@@ -15,16 +15,17 @@ var DB *sql.DB
 func InitDB(cfg *configs.Config) {
 	var err error
 	var dbURL string
+
 	// Check if running on Google Cloud Run
 	if os.Getenv("K_SERVICE") != "" {
 		// Use Unix socket for Cloud SQL Proxy connection
-		socketPath := fmt.Sprintf("/cloudsql/%s/.s.PGSQL.5432", cfg.DBHost)
-		dbURL = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
-			socketPath, // Full socket path for Cloud SQL
+		// cfg.DBHost contains the full connection name: juno-rideshare-461800:us-east4:juno-production-db
+		dbURL = fmt.Sprintf("host=/cloudsql/%s user=%s password=%s dbname=%s sslmode=disable",
+			cfg.DBHost, // Just use the connection name directly
 			cfg.DBUser,
 			cfg.DBPassword,
 			cfg.DBName)
-		log.Printf("🔗 Using Cloud SQL socket: %s", socketPath)
+		log.Printf("🔗 Using Cloud SQL socket: /cloudsql/%s", cfg.DBHost)
 	} else {
 		// Use TCP connection for local development with Cloud SQL
 		dbURL = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
