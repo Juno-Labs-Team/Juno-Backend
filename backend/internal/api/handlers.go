@@ -348,31 +348,6 @@ func getIntFieldWithDefault(data map[string]interface{}, key string, defaultVal 
 	return &defaultVal
 }
 
-// GetFriends - Get user's friends list
-func GetFriends(c *gin.Context) {
-	userID := c.GetString("userID")
-
-	// TODO: Fetch friends from database
-	c.JSON(http.StatusOK, gin.H{
-		"message": "✅ Get friends endpoint working",
-		"userID":  userID,
-		"friends": []gin.H{},
-		"status":  "coming soon",
-	})
-}
-
-// AddFriend - Add a friend
-func AddFriend(c *gin.Context) {
-	userID := c.GetString("userID")
-
-	// TODO: Add friend to database
-	c.JSON(http.StatusOK, gin.H{
-		"message": "✅ Add friend endpoint working",
-		"userID":  userID,
-		"status":  "coming soon",
-	})
-}
-
 // Enhanced GetRides - Real implementation matching your frontend
 func GetRides(c *gin.Context) {
 	userID := c.GetString("userID")
@@ -1019,4 +994,380 @@ func handleFloatPointer(f *float64) float64 {
 		return 0.0
 	}
 	return *f
+}
+
+// GetFriends - Real implementation with friends list
+func GetFriends(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	friends, err := getFriendsFromDatabase(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch friends"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"friends": friends,
+		"count":   len(friends),
+		"message": "✅ Friends retrieved successfully",
+	})
+}
+
+// AddFriend - Real implementation for adding friends by ID
+func AddFriend(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var requestData map[string]interface{}
+	if err := c.ShouldBindJSON(&requestData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
+		return
+	}
+
+	var friendID interface{}
+	var ok bool
+
+	// Check for friendId or userId
+	if friendID, ok = requestData["friendId"]; !ok {
+		if friendID, ok = requestData["userId"]; !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Friend ID is required"})
+			return
+		}
+	}
+
+	err := addFriendInDatabase(userID, fmt.Sprintf("%v", friendID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Friend request sent successfully! 👥",
+		"status":   "pending",
+		"friendId": friendID,
+	})
+}
+
+// SearchUsers - For your SearchScreen.js user search
+func SearchUsers(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	query := c.Query("q")
+	if query == "" || len(query) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Search query must be at least 2 characters"})
+		return
+	}
+
+	users, err := searchUsersInDatabase(userID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"users":   users,
+		"count":   len(users),
+		"query":   query,
+		"message": "✅ User search completed",
+	})
+}
+
+// AddFriendByUsername - For your AddFriendScreen.js
+func AddFriendByUsername(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var requestData map[string]interface{}
+	if err := c.ShouldBindJSON(&requestData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
+		return
+	}
+
+	username, ok := requestData["username"].(string)
+	if !ok || username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
+		return
+	}
+
+	err := addFriendByUsernameInDatabase(userID, username)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Friend request sent successfully! 👥",
+		"status":   "pending",
+		"username": username,
+	})
+}
+
+// GetFriendRequests - For managing friend requests
+func GetFriendRequests(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	requests, err := getFriendRequestsFromDatabase(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch friend requests"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"requests": requests,
+		"count":    len(requests),
+		"message":  "✅ Friend requests retrieved",
+	})
+}
+
+// Database helper functions for Friends API
+func getFriendsFromDatabase(userID string) ([]map[string]interface{}, error) {
+	query := `
+        SELECT u.id, u.first_name, u.last_name, u.username, u.profile_picture_url,
+               up.school, up.class_year, up.rating
+        FROM friendships f
+        JOIN users u ON (
+            CASE 
+                WHEN f.user_id = $1 THEN u.id = f.friend_id
+                ELSE u.id = f.user_id
+            END
+        )
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        WHERE (f.user_id = $1 OR f.friend_id = $1) 
+          AND f.status = 'accepted'
+        ORDER BY u.first_name, u.last_name
+    `
+
+	rows, err := database.DB.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var friends []map[string]interface{}
+	for rows.Next() {
+		var friend struct {
+			ID        int     `json:"id"`
+			FirstName string  `json:"firstName"`
+			LastName  string  `json:"lastName"`
+			Username  string  `json:"username"`
+			Photo     *string `json:"profilePicture"`
+			School    *string `json:"school"`
+			ClassYear *string `json:"classYear"`
+			Rating    float64 `json:"rating"`
+		}
+
+		err := rows.Scan(
+			&friend.ID, &friend.FirstName, &friend.LastName, &friend.Username,
+			&friend.Photo, &friend.School, &friend.ClassYear, &friend.Rating,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		friendMap := map[string]interface{}{
+			"id":             friend.ID,
+			"firstName":      friend.FirstName,
+			"lastName":       friend.LastName,
+			"username":       friend.Username,
+			"profilePicture": handleStringPointer(friend.Photo),
+			"school":         handleStringPointer(friend.School),
+			"classYear":      handleStringPointer(friend.ClassYear),
+			"rating":         friend.Rating,
+			"status":         "accepted", // All returned friends are accepted
+		}
+		friends = append(friends, friendMap)
+	}
+
+	return friends, nil
+}
+
+func addFriendInDatabase(userID, friendID string) error {
+	// Check if users exist and are different
+	if userID == friendID {
+		return fmt.Errorf("cannot add yourself as a friend")
+	}
+
+	// Check if friendship already exists
+	var existingCount int
+	err := database.DB.QueryRow(`
+        SELECT COUNT(*) FROM friendships 
+        WHERE (user_id = $1 AND friend_id = $2) 
+           OR (user_id = $2 AND friend_id = $1)
+    `, userID, friendID).Scan(&existingCount)
+
+	if err != nil {
+		return err
+	}
+
+	if existingCount > 0 {
+		return fmt.Errorf("friendship already exists or request already sent")
+	}
+
+	// Create friendship request
+	_, err = database.DB.Exec(`
+        INSERT INTO friendships (user_id, friend_id, status, created_at)
+        VALUES ($1, $2, 'pending', CURRENT_TIMESTAMP)
+    `, userID, friendID)
+
+	return err
+}
+
+func addFriendByUsernameInDatabase(userID, username string) error {
+	// Find user by username
+	var friendID int
+	var friendUsername string
+	err := database.DB.QueryRow(
+		"SELECT id, username FROM users WHERE LOWER(username) = LOWER($1)",
+		username,
+	).Scan(&friendID, &friendUsername)
+
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return fmt.Errorf("user with username '%s' not found", username)
+		}
+		return err
+	}
+
+	// Use existing addFriendInDatabase function
+	return addFriendInDatabase(userID, strconv.Itoa(friendID))
+}
+
+func searchUsersInDatabase(userID, query string) ([]map[string]interface{}, error) {
+	searchQuery := `
+        SELECT u.id, u.first_name, u.last_name, u.username, u.profile_picture_url,
+               up.school, up.class_year, up.rating
+        FROM users u
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        WHERE u.id != $1
+          AND (
+            LOWER(u.first_name) LIKE LOWER($2) OR
+            LOWER(u.last_name) LIKE LOWER($2) OR
+            LOWER(u.username) LIKE LOWER($2) OR
+            LOWER(CONCAT(u.first_name, ' ', u.last_name)) LIKE LOWER($2)
+          )
+        ORDER BY u.first_name, u.last_name
+        LIMIT 20
+    `
+
+	rows, err := database.DB.Query(searchQuery, userID, "%"+query+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []map[string]interface{}
+	for rows.Next() {
+		var user struct {
+			ID        int     `json:"id"`
+			FirstName string  `json:"firstName"`
+			LastName  string  `json:"lastName"`
+			Username  string  `json:"username"`
+			Photo     *string `json:"profilePicture"`
+			School    *string `json:"school"`
+			ClassYear *string `json:"classYear"`
+			Rating    float64 `json:"rating"`
+		}
+
+		err := rows.Scan(
+			&user.ID, &user.FirstName, &user.LastName, &user.Username,
+			&user.Photo, &user.School, &user.ClassYear, &user.Rating,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		userMap := map[string]interface{}{
+			"id":             user.ID,
+			"firstName":      user.FirstName,
+			"lastName":       user.LastName,
+			"username":       user.Username,
+			"profilePicture": handleStringPointer(user.Photo),
+			"school":         handleStringPointer(user.School),
+			"classYear":      handleStringPointer(user.ClassYear),
+			"rating":         user.Rating,
+		}
+		users = append(users, userMap)
+	}
+
+	return users, nil
+}
+
+func getFriendRequestsFromDatabase(userID string) ([]map[string]interface{}, error) {
+	query := `
+        SELECT f.id, f.status, f.created_at,
+               u.id, u.first_name, u.last_name, u.username, u.profile_picture_url,
+               up.school, up.class_year
+        FROM friendships f
+        JOIN users u ON u.id = f.user_id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        WHERE f.friend_id = $1 AND f.status = 'pending'
+        ORDER BY f.created_at DESC
+    `
+
+	rows, err := database.DB.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var requests []map[string]interface{}
+	for rows.Next() {
+		var request struct {
+			ID        int     `json:"requestId"`
+			Status    string  `json:"status"`
+			CreatedAt string  `json:"createdAt"`
+			UserID    int     `json:"userId"`
+			FirstName string  `json:"firstName"`
+			LastName  string  `json:"lastName"`
+			Username  string  `json:"username"`
+			Photo     *string `json:"profilePicture"`
+			School    *string `json:"school"`
+			ClassYear *string `json:"classYear"`
+		}
+
+		err := rows.Scan(
+			&request.ID, &request.Status, &request.CreatedAt,
+			&request.UserID, &request.FirstName, &request.LastName, &request.Username,
+			&request.Photo, &request.School, &request.ClassYear,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		requestMap := map[string]interface{}{
+			"id":        request.ID,
+			"status":    request.Status,
+			"createdAt": request.CreatedAt,
+			"user": map[string]interface{}{
+				"id":             request.UserID,
+				"firstName":      request.FirstName,
+				"lastName":       request.LastName,
+				"username":       request.Username,
+				"profilePicture": handleStringPointer(request.Photo),
+				"school":         handleStringPointer(request.School),
+				"classYear":      handleStringPointer(request.ClassYear),
+			},
+		}
+		requests = append(requests, requestMap)
+	}
+
+	return requests, nil
 }
