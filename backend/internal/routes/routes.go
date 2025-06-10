@@ -46,6 +46,7 @@ func SetupRoutes(cfg *configs.Config) *gin.Engine {
 	{
 		// Auth endpoints
 		protected.GET("/auth/me", auth.GetCurrentUser)
+		protected.POST("/auth/logout", auth.Logout) // ✅ Add this logout route
 
 		// API endpoints - Use the working api package functions
 		protected.GET("/api/profile", api.GetProfile)
