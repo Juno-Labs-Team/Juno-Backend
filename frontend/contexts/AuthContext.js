@@ -86,13 +86,24 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithToken = async (token) => {
     try {
-      console.log('🔑 Logging in with token...');
+      console.log('🔑 Logging in with token...', token.substring(0, 20) + '...');
       
+      // Set the token first
       await AsyncStorage.setItem('authToken', token);
       ApiClient.setAuthToken(token);
       
+      console.log('🌐 Making profile request to verify token...');
+      
+      // Try to get profile to verify token works
       const response = await ApiClient.getProfile();
-      const userData = response.profile;
+      console.log('✅ Profile response:', response);
+      
+      const userData = response.profile || response;
+      
+      if (!userData) {
+        throw new Error('No user data received');
+      }
+      
       setUser(userData);
       
       // Check if user needs onboarding
@@ -108,10 +119,14 @@ export const AuthProvider = ({ children }) => {
       
       console.log('✅ Login successful:', userData.username);
       return { success: true, user: userData };
+      
     } catch (error) {
       console.error('❌ Token login failed:', error);
+      
+      // Clear invalid token
       await AsyncStorage.removeItem('authToken');
       ApiClient.setAuthToken(null);
+      
       return { success: false, error: error.message };
     }
   };
