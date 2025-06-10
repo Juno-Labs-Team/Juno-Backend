@@ -395,3 +395,141 @@ func CreateRide(c *gin.Context) {
 		"status":  "coming soon",
 	})
 }
+
+// GetNearbyRides - Get rides near user location
+func GetNearbyRides(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get lat/lng from query params
+	lat := c.Query("lat")
+	lng := c.Query("lng")
+	radius := c.DefaultQuery("radius", "10") // 10km default
+
+	// TODO: Implement proper geolocation query with your rides table
+	rides, err := getNearbyRidesFromDB(userID, lat, lng, radius)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch nearby rides"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"rides":    rides,
+		"location": gin.H{"lat": lat, "lng": lng},
+		"radius":   radius,
+	})
+}
+
+// GetRideDetails - Get detailed ride information
+func GetRideDetails(c *gin.Context) {
+	userID := c.GetString("userID")
+	rideID := c.Param("id")
+
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	ride, err := getRideDetailsFromDB(rideID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch ride details"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ride": ride})
+}
+
+// JoinRide - Join an available ride
+func JoinRide(c *gin.Context) {
+	userID := c.GetString("userID")
+	rideID := c.Param("id")
+
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	err := joinRideInDB(rideID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully joined ride",
+		"rideId":  rideID,
+	})
+}
+
+// LeaveRide - Leave a joined ride
+func LeaveRide(c *gin.Context) {
+	userID := c.GetString("userID")
+	rideID := c.Param("id")
+
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	err := leaveRideInDB(rideID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully left ride",
+		"rideId":  rideID,
+	})
+}
+
+// CancelRide - Cancel a ride (driver only)
+func CancelRide(c *gin.Context) {
+	userID := c.GetString("userID")
+	rideID := c.Param("id")
+
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	err := cancelRideInDB(rideID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Ride cancelled successfully",
+		"rideId":  rideID,
+	})
+}
+
+// Helper functions (implement these with your database schema)
+func getNearbyRidesFromDB(userID, lat, lng, radius string) ([]map[string]interface{}, error) {
+	// TODO: Implement with PostGIS or distance calculation
+	return []map[string]interface{}{}, nil
+}
+
+func getRideDetailsFromDB(rideID, userID string) (map[string]interface{}, error) {
+	// TODO: Implement with joins to get driver info, passengers, etc.
+	return map[string]interface{}{}, nil
+}
+
+func joinRideInDB(rideID, userID string) error {
+	// TODO: Check available seats, insert into ride_passengers table
+	return nil
+}
+
+func leaveRideInDB(rideID, userID string) error {
+	// TODO: Remove from ride_passengers table
+	return nil
+}
+
+func cancelRideInDB(rideID, userID string) error {
+	// TODO: Check if user is driver, update ride status
+	return nil
+}
