@@ -2,9 +2,11 @@ package routes
 
 import (
 	"juno-backend/configs"
-	"juno-backend/internal/api"
+	"juno-backend/internal/api" // ✅ Keep this - it works
 	"juno-backend/internal/auth"
 	"juno-backend/internal/middleware"
+
+	// Remove: "juno-backend/internal/handlers"  // ❌ This doesn't exist
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -45,20 +47,18 @@ func SetupRoutes(cfg *configs.Config) *gin.Engine {
 		// Auth endpoints
 		protected.GET("/auth/me", auth.GetCurrentUser)
 
-		// API endpoints (working functions only)
+		// API endpoints - Use the working api package functions
 		protected.GET("/api/profile", api.GetProfile)
 		protected.PUT("/api/profile", api.UpdateProfile)
 		protected.GET("/api/friends", api.GetFriends)
 		protected.POST("/api/friends", api.AddFriend)
-
-		// All rides endpoints - fully implemented
-		protected.GET("/api/rides", api.GetRides)               // ✅ Enhanced with filtering
-		protected.POST("/api/rides", api.CreateRide)            // ✅ Enhanced with full details
-		protected.GET("/api/rides/nearby", api.GetNearbyRides)  // ✅ Location-based search
-		protected.GET("/api/rides/:id", api.GetRideDetails)     // ✅ Full ride details + passengers
-		protected.POST("/api/rides/:id/join", api.JoinRide)     // ✅ Join ride with validation
-		protected.DELETE("/api/rides/:id/leave", api.LeaveRide) // ✅ Leave ride functionality
-		protected.POST("/api/rides/:id/cancel", api.CancelRide) // ✅ Cancel ride (driver only)
+		protected.GET("/api/rides", api.GetRides)
+		protected.POST("/api/rides", api.CreateRide)
+		protected.GET("/api/rides/nearby", api.GetNearbyRides)
+		protected.GET("/api/rides/:id", api.GetRideDetails)
+		protected.POST("/api/rides/:id/join", api.JoinRide)
+		protected.DELETE("/api/rides/:id/leave", api.LeaveRide)
+		protected.POST("/api/rides/:id/cancel", api.CancelRide)
 	}
 
 	return r
