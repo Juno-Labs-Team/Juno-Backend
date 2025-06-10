@@ -595,22 +595,21 @@ func validateRideData(data map[string]interface{}) error {
 func getRidesFromDatabase(userID, origin, destination, date, friendsOnly string) ([]map[string]interface{}, error) {
 	baseQuery := `
         SELECT r.id, r.origin_address, r.destination_address, r.departure_time, 
-               r.max_passengers, r.price_per_seat, r.description, r.status, r.created_at,
-               r.origin_lat, r.origin_lng, r.destination_lat, r.destination_lng,
+               r.max_passengers, r.current_passengers, r.price_per_seat, r.description, 
+               r.status, r.created_at, r.origin_lat, r.origin_lng, r.destination_lat, r.destination_lng,
                u.first_name, u.last_name, u.profile_picture_url,
-               up.car_make, up.car_model, up.car_color, up.rating,
-               (SELECT COUNT(*) FROM ride_passengers rp WHERE rp.ride_id = r.id AND rp.status = 'confirmed') as current_passengers
+               up.car_make, up.car_model, up.car_color, up.rating
         FROM rides r
         JOIN users u ON r.driver_id = u.id
         LEFT JOIN user_profiles up ON u.id = up.user_id
         WHERE r.status = 'active' AND r.departure_time > NOW()
-          AND r.driver_id != $1
     `
+	// ✅ Removed the "AND r.driver_id != $1" filter so you can see your own rides
 
-	args := []interface{}{userID}
-	argIndex := 2
+	args := []interface{}{}
+	argIndex := 1 // ✅ Start from 1 since we removed the userID parameter
 
-	// Add filters
+	// Add filters to match your schema
 	if origin != "" {
 		baseQuery += fmt.Sprintf(" AND LOWER(r.origin_address) LIKE LOWER($%d)", argIndex)
 		args = append(args, "%"+origin+"%")
@@ -630,11 +629,11 @@ func getRidesFromDatabase(userID, origin, destination, date, friendsOnly string)
 	}
 
 	if friendsOnly == "true" {
-		baseQuery += fmt.Sprintf(` AND r.driver_id IN (
+		baseQuery += fmt.Sprintf(` AND (r.only_friends = TRUE AND r.driver_id IN (
             SELECT friend_id FROM friendships WHERE user_id = $%d AND status = 'accepted'
             UNION
             SELECT user_id FROM friendships WHERE friend_id = $%d AND status = 'accepted'
-        )`, argIndex, argIndex+1)
+        ))`, argIndex, argIndex+1)
 		args = append(args, userID, userID)
 		argIndex += 2
 	}
@@ -655,6 +654,7 @@ func getRidesFromDatabase(userID, origin, destination, date, friendsOnly string)
 			DestAddress       string   `json:"destinationAddress"`
 			DepartureTime     string   `json:"departureTime"`
 			MaxPassengers     int      `json:"maxPassengers"`
+			CurrentPassengers int      `json:"currentPassengers"`
 			PricePerSeat      *float64 `json:"pricePerSeat"`
 			Description       *string  `json:"description"`
 			Status            string   `json:"status"`
@@ -670,15 +670,14 @@ func getRidesFromDatabase(userID, origin, destination, date, friendsOnly string)
 			CarModel          *string  `json:"carModel"`
 			CarColor          *string  `json:"carColor"`
 			DriverRating      float64  `json:"driverRating"`
-			CurrentPassengers int      `json:"currentPassengers"`
 		}
 
 		err := rows.Scan(
 			&ride.ID, &ride.OriginAddress, &ride.DestAddress, &ride.DepartureTime,
-			&ride.MaxPassengers, &ride.PricePerSeat, &ride.Description, &ride.Status, &ride.CreatedAt,
-			&ride.OriginLat, &ride.OriginLng, &ride.DestLat, &ride.DestLng,
+			&ride.MaxPassengers, &ride.CurrentPassengers, &ride.PricePerSeat, &ride.Description,
+			&ride.Status, &ride.CreatedAt, &ride.OriginLat, &ride.OriginLng, &ride.DestLat, &ride.DestLng,
 			&ride.DriverFirstName, &ride.DriverLastName, &ride.DriverPhoto,
-			&ride.CarMake, &ride.CarModel, &ride.CarColor, &ride.DriverRating, &ride.CurrentPassengers,
+			&ride.CarMake, &ride.CarModel, &ride.CarColor, &ride.DriverRating,
 		)
 		if err != nil {
 			return nil, err
@@ -686,6 +685,14 @@ func getRidesFromDatabase(userID, origin, destination, date, friendsOnly string)
 
 		// Format data to match your HomeScreen.js expectations
 		departureTime, _ := time.Parse(time.RFC3339, ride.DepartureTime)
+
+		// Determine if current user is the driver
+		currentUserIDInt, _ := strconv.Atoi(userID)
+		isDriver := false
+		// We'll need to get the driver_id for this specific ride
+		var driverID int
+		database.DB.QueryRow("SELECT driver_id FROM rides WHERE id = $1", ride.ID).Scan(&driverID)
+		isDriver = driverID == currentUserIDInt
 
 		rideMap := map[string]interface{}{
 			"id":                ride.ID,
@@ -703,8 +710,9 @@ func getRidesFromDatabase(userID, origin, destination, date, friendsOnly string)
 			"description":       handleStringPointer(ride.Description),
 			"status":            ride.Status,
 			"emoji":             "🚗",
-			"color":             "4285F4", // Blue theme
+			"color":             "4285F4",
 			"driverName":        ride.DriverFirstName + " " + ride.DriverLastName,
+			"isDriver":          isDriver, // ✅ Add this flag
 			"driver": map[string]interface{}{
 				"firstName": ride.DriverFirstName,
 				"lastName":  ride.DriverLastName,
@@ -897,13 +905,12 @@ func getRideDetailsByID(rideID, userID string) (map[string]interface{}, error) {
 }
 
 func joinRideInDatabase(rideID, userID string) error {
-	// Check if ride exists and has available seats
+	// Check if ride exists and has available seats (using your schema)
 	var maxPassengers, currentPassengers, driverID int
 	err := database.DB.QueryRow(`
-        SELECT r.max_passengers, r.driver_id,
-               (SELECT COUNT(*) FROM ride_passengers rp WHERE rp.ride_id = r.id AND rp.status = 'confirmed')
-        FROM rides r WHERE r.id = $1 AND r.status = 'active'
-    `, rideID).Scan(&maxPassengers, &driverID, &currentPassengers)
+        SELECT max_passengers, current_passengers, driver_id
+        FROM rides WHERE id = $1 AND status = 'active'
+    `, rideID).Scan(&maxPassengers, &currentPassengers, &driverID)
 
 	if err != nil {
 		return fmt.Errorf("ride not found or not available")
@@ -934,9 +941,9 @@ func joinRideInDatabase(rideID, userID string) error {
 		return fmt.Errorf("already joined this ride")
 	}
 
-	// Add passenger
+	// Add passenger - your triggers will handle current_passengers count automatically
 	_, err = database.DB.Exec(
-		"INSERT INTO ride_passengers (ride_id, passenger_id, status, joined_at) VALUES ($1, $2, 'confirmed', CURRENT_TIMESTAMP)",
+		"INSERT INTO ride_passengers (ride_id, passenger_id, status, created_at) VALUES ($1, $2, 'accepted', CURRENT_TIMESTAMP)",
 		rideID, userID,
 	)
 
