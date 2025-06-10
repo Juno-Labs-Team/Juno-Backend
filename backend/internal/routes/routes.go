@@ -50,8 +50,11 @@ func SetupRoutes(cfg *configs.Config) *gin.Engine {
 		// API endpoints - Use the working api package functions
 		protected.GET("/api/profile", api.GetProfile)
 		protected.PUT("/api/profile", api.UpdateProfile)
-		protected.GET("/api/friends", api.GetFriends)
-		protected.POST("/api/friends", api.AddFriend)
+		protected.GET("/api/friends", api.GetFriends)                    // ✅ Real friends list
+		protected.POST("/api/friends", api.AddFriend)                    // ✅ Add friend by ID
+		protected.GET("/api/friends/requests", api.GetFriendRequests)    // ✅ Pending requests
+		protected.POST("/api/friends/username", api.AddFriendByUsername) // ✅ Add by username
+		protected.GET("/api/users/search", api.SearchUsers)              // ✅ User search
 		protected.GET("/api/rides", api.GetRides)
 		protected.POST("/api/rides", api.CreateRide)
 		protected.GET("/api/rides/nearby", api.GetNearbyRides)
