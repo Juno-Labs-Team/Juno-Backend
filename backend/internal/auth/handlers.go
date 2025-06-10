@@ -2,15 +2,15 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"juno-backend/configs"
 	"juno-backend/internal/database"
-	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,478 +19,293 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-type GoogleUserInfo struct {
-	ID      string `json:"id"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Picture string `json:"picture"`
-	Given   string `json:"given_name"`
-	Family  string `json:"family_name"`
-}
+var googleOAuthConfig *oauth2.Config
 
-type Claims struct {
-	UserID int    `json:"user_id"`
-	Email  string `json:"email"`
-	jwt.RegisteredClaims
-}
-
-var (
-	googleOauthConfig *oauth2.Config
-	jwtSecret         string
-)
-
+// Initialize OAuth configuration
 func InitOAuth(cfg *configs.Config) {
-	// Validate required config
-	if cfg.GoogleClientID == "" {
-		log.Fatal("❌ GOOGLE_CLIENT_ID is required")
-	}
-	if cfg.GoogleClientSecret == "" {
-		log.Fatal("❌ GOOGLE_CLIENT_SECRET is required")
-	}
-	if cfg.JWTSecret == "" {
-		log.Fatal("❌ JWT_SECRET is required")
-	}
-
-	// Default to localhost for development
-	redirectURL := "http://localhost:" + cfg.Port + "/auth/google/callback"
-
-	// Check for Google Cloud Run environment
+	// Build redirect URL based on environment - removed cfg.OAuthRedirectURL reference
+	var redirectURL string
 	if os.Getenv("K_SERVICE") != "" {
-		// Running on Cloud Run - use the service URL
-		redirectURL = os.Getenv("OAUTH_REDIRECT_URL")
-		if redirectURL == "" {
-			// Use the known Cloud Run URL from the chat history
-			redirectURL = "https://juno-backend-587837548118.us-east4.run.app/auth/google/callback"
-			log.Printf("⚠️ Using fallback Cloud Run URL")
-		}
+		// Production Cloud Run
+		redirectURL = "https://juno-backend-587837548118.us-east4.run.app/auth/google/callback"
+	} else {
+		// Local development
+		redirectURL = "http://localhost:8080/auth/google/callback"
 	}
 
-	googleOauthConfig = &oauth2.Config{
+	googleOAuthConfig = &oauth2.Config{
 		RedirectURL:  redirectURL,
 		ClientID:     cfg.GoogleClientID,
 		ClientSecret: cfg.GoogleClientSecret,
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
+		Scopes:       []string{"openid", "profile", "email"},
 		Endpoint:     google.Endpoint,
 	}
-	jwtSecret = cfg.JWTSecret
-
-	log.Printf("✅ OAuth configured successfully")
-	log.Printf("🔗 OAuth Redirect URL: %s", redirectURL)
 }
 
-func HandleGoogleLogin(c *gin.Context) {
-	url := googleOauthConfig.AuthCodeURL("state", oauth2.AccessTypeOffline)
-	c.Redirect(http.StatusTemporaryRedirect, url)
-}
-
-func HandleGoogleCallback(c *gin.Context) {
-	log.Printf("🔵 OAuth callback received")
-
-	// Get the authorization code from the callback
-	code := c.Query("code")
-	if code == "" {
-		log.Printf("❌ No authorization code received")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No authorization code received"})
-		return
-	}
-
-	// Check if OAuth config is initialized
-	if googleOauthConfig == nil {
-		log.Printf("❌ OAuth config is nil")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "OAuth not configured"})
-		return
-	}
-
-	// Exchange code for token
-	token, err := googleOauthConfig.Exchange(context.Background(), code)
-	if err != nil {
-		log.Printf("❌ Failed to exchange code for token: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange code for token"})
-		return
-	}
-
-	// Check if token is valid
-	if token == nil {
-		log.Printf("❌ Received nil token from OAuth exchange")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid token received"})
-		return
-	}
-
-	// Create HTTP client with token
-	client := googleOauthConfig.Client(context.Background(), token)
-	if client == nil {
-		log.Printf("❌ Failed to create OAuth client")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create OAuth client"})
-		return
-	}
-
-	// Get user info from Google
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil {
-		log.Printf("❌ Failed to get user info: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
-		return
-	}
-
-	// Critical nil check that was missing
-	if resp == nil {
-		log.Printf("❌ Received nil response from Google API")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response from Google"})
-		return
-	}
-	defer resp.Body.Close()
-
-	// Check if response body is valid
-	if resp.Body == nil {
-		log.Printf("❌ Response body is nil")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid response body"})
-		return
-	}
-
-	var userInfo struct {
-		ID            string `json:"id"`
-		Email         string `json:"email"`
-		Name          string `json:"name"`
-		Picture       string `json:"picture"`
-		GivenName     string `json:"given_name"`
-		FamilyName    string `json:"family_name"`
-		VerifiedEmail bool   `json:"verified_email"`
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("❌ Failed to read response body: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read user info"})
-		return
-	}
-
-	if err := json.Unmarshal(body, &userInfo); err != nil {
-		log.Printf("❌ Failed to parse user info: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse user info"})
-		return
-	}
-
-	// Validate required fields
-	if userInfo.Email == "" || userInfo.ID == "" {
-		log.Printf("❌ Missing required user info fields")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing required user information"})
-		return
-	}
-
-	// Check database connection
-	if database.DB == nil {
-		log.Printf("❌ Database connection is nil")
-		c.HTML(http.StatusInternalServerError, "", `
-            <!DOCTYPE html>
-            <html>
-            <head><title>Database Error</title></head>
-            <body style="font-family: Arial; background: #0a0c1e; color: white; text-align: center; padding: 50px;">
-                <h1>🚗 Juno</h1>
-                <h2 style="color: #ff6b6b;">Database Connection Error</h2>
-                <p>The database is not connected. Please try again in a moment.</p>
-                <a href="/auth/google" style="color: #00ffe7;">Try Again</a>
-            </body>
-            </html>
-        `)
-		return
-	}
-
-	// Test database connection
-	if err := database.DB.Ping(); err != nil {
-		log.Printf("❌ Database ping failed: %v", err)
-		c.HTML(http.StatusInternalServerError, "", `
-            <!DOCTYPE html>
-            <html>
-            <head><title>Database Error</title></head>
-            <body style="font-family: Arial; background: #0a0c1e; color: white; text-align: center; padding: 50px;">
-                <h1>🚗 Juno</h1>
-                <h2 style="color: #ff6b6b;">Database Connection Error</h2>
-                <p>Cannot connect to database. Please try again.</p>
-                <a href="/auth/google" style="color: #00ffe7;">Try Again</a>
-            </body>
-            </html>
-        `)
-		return
-	}
-
-	log.Printf("✅ User info received: %s (%s)", userInfo.Email, userInfo.Name)
-
-	// Check if user exists or create new user
-	var userID int
-	var username string
-	err = database.DB.QueryRow("SELECT id, username FROM users WHERE email = $1", userInfo.Email).Scan(&userID, &username)
-
-	if err != nil {
-		log.Printf("🆕 Creating new user for email: %s", userInfo.Email)
-
-		// User doesn't exist, create new user
-		username = strings.Split(userInfo.Email, "@")[0]
-
-		// Ensure unique username
-		originalUsername := username
-		counter := 1
-		for {
-			var existingID int
-			err := database.DB.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&existingID)
-			if err != nil {
-				// Username is available
-				break
-			}
-			username = fmt.Sprintf("%s%d", originalUsername, counter)
-			counter++
+// Google OAuth login - redirect to Google
+func GoogleLogin(cfg *configs.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Initialize OAuth if not done
+		if googleOAuthConfig == nil {
+			InitOAuth(cfg)
 		}
 
-		log.Printf("🔤 Using username: %s", username)
+		// Generate state parameter for security
+		state := generateRandomState()
 
-		err = database.DB.QueryRow(`
-            INSERT INTO users (username, email, google_id, first_name, last_name, profile_picture_url, password_hash) 
-            VALUES ($1, $2, $3, $4, $5, $6, 'google_oauth') 
-            RETURNING id`,
-			username, userInfo.Email, userInfo.ID, userInfo.GivenName, userInfo.FamilyName, userInfo.Picture).Scan(&userID)
+		// Store state in session/cookie (simplified for now)
+		c.SetCookie("oauth_state", state, 300, "/", "", false, true)
 
-		if err != nil {
-			log.Printf("❌ Error creating user: %v", err)
-			c.HTML(http.StatusInternalServerError, "", `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Juno - Login Error</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-                        .container { max-width: 600px; margin: 0 auto; }
-                        .error { color: #ff6b6b; }
-                    </style>
-                </head>
-                <body>
-                    <div class="container">
-                        <h1>🚗 Juno</h1>
-                        <div class="error">
-                            <h2>Database Error</h2>
-                            <p>Failed to create user account. Please try again.</p>
-                            <p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
-                        </div>
-                    </div>
-                </body>
-                </html>
-            `)
+		// Redirect to Google OAuth
+		url := googleOAuthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+		c.Redirect(http.StatusTemporaryRedirect, url)
+	}
+}
+
+// Google OAuth callback - handle OAuth response
+func GoogleCallback(cfg *configs.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Initialize OAuth if not done
+		if googleOAuthConfig == nil {
+			InitOAuth(cfg)
+		}
+
+		// Verify state parameter
+		state := c.Query("state")
+		cookieState, err := c.Cookie("oauth_state")
+		if err != nil || state != cookieState {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid state parameter"})
 			return
 		}
 
-		log.Printf("✅ Created new user: %s (ID: %d)", username, userID)
-	} else {
-		log.Printf("✅ Found existing user: %s (ID: %d)", username, userID)
+		// Exchange authorization code for token
+		code := c.Query("code")
+		if code == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code not found"})
+			return
+		}
+
+		token, err := googleOAuthConfig.Exchange(context.Background(), code)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange code for token"})
+			return
+		}
+
+		// Get user info from Google
+		userInfo, err := getUserInfoFromGoogle(token)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
+			return
+		}
+
+		// Create or update user in database
+		user, err := createOrUpdateUser(userInfo)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create/update user"})
+			return
+		}
+
+		// Generate JWT token
+		jwtToken, err := generateJWTToken(user, cfg.JWTSecret)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token"})
+			return
+		}
+
+		// Return success with token
+		c.JSON(http.StatusOK, gin.H{
+			"message": "✅ OAuth login successful",
+			"token":   jwtToken,
+			"user":    user,
+		})
 	}
-
-	// Generate JWT token
-	if jwtSecret == "" {
-		log.Printf("❌ JWT secret is not set")
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Configuration Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Configuration Error</h2>
-						<p>Server configuration is incomplete. Please contact support.</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
-
-	claims := &Claims{
-		UserID: userID,
-		Email:  userInfo.Email,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour * 7)), // 7 days
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-
-	tokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(jwtSecret))
-	if err != nil {
-		log.Printf("❌ Failed to generate JWT: %v", err)
-		c.HTML(http.StatusInternalServerError, "", `
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<title>Juno - Login Error</title>
-				<style>
-					body { font-family: Arial, sans-serif; background: #0a0c1e; color: white; text-align: center; padding: 50px; }
-					.container { max-width: 600px; margin: 0 auto; }
-					.error { color: #ff6b6b; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>🚗 Juno</h1>
-					<div class="error">
-						<h2>Login Error</h2>
-						<p>Failed to generate authentication token. Please try again.</p>
-						<p style="font-size: 12px; color: #666;">Error: `+err.Error()+`</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`)
-		return
-	}
-
-	log.Printf("✅ JWT generated successfully for user %s", username)
-
-	// Safe username display - use email if Given name is empty
-	displayName := userInfo.GivenName
-	if displayName == "" {
-		displayName = strings.Split(userInfo.Email, "@")[0]
-	}
-
-	// Return success page with token that user can copy
-	c.HTML(http.StatusOK, "", fmt.Sprintf(`
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>Juno - Login Successful</title>
-			<style>
-				body { 
-					font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-					background: linear-gradient(135deg, #0a0c1e 0%%, #1a1a30 100%%); 
-					color: white; 
-					text-align: center; 
-					padding: 20px;
-					margin: 0;
-					min-height: 100vh;
-					display: flex;
-					align-items: center;
-					justify-content: center;
-				}
-				.container { 
-					max-width: 700px; 
-					margin: 0 auto;
-					background: rgba(24, 24, 37, 0.8);
-					border-radius: 20px;
-					padding: 40px;
-					border: 2px solid #00ffe744;
-					box-shadow: 0 8px 32px rgba(0, 255, 231, 0.2);
-				}
-				.success { color: #00ffe7; }
-				.logo { font-size: 48px; margin-bottom: 20px; }
-				h1 { color: #00ffe7; text-shadow: 0 0 10px #00ffe7; }
-				.token-container {
-					background: #1e1e1e;
-					border: 2px solid #00ffe7;
-					border-radius: 15px;
-					padding: 20px;
-					margin: 20px 0;
-					word-break: break-all;
-					font-family: monospace;
-					font-size: 14px;
-					line-height: 1.5;
-				}
-				.copy-btn {
-					background: #00ffe7;
-					color: #000;
-					border: none;
-					padding: 12px 25px;
-					border-radius: 25px;
-					font-weight: bold;
-					cursor: pointer;
-					margin: 10px;
-					font-size: 16px;
-					transition: all 0.3s ease;
-				}
-				.copy-btn:hover {
-					background: #00d4c4;
-					box-shadow: 0 4px 15px rgba(0, 255, 231, 0.4);
-				}
-				.instructions {
-					background: rgba(0, 255, 231, 0.1);
-					border-radius: 15px;
-					padding: 20px;
-					margin: 20px 0;
-					text-align: left;
-				}
-				.step {
-					margin: 10px 0;
-					padding-left: 20px;
-				}
-			</style>
-		</head>
-		<body>
-			<div class="container">
-				<div class="logo">🚗</div>
-				<h1>Juno Login Successful!</h1>
-				<div class="success">
-					<p><strong>Welcome, %s!</strong></p>
-					<p>Copy the token below and paste it in the Juno app:</p>
-				</div>
-				
-				<div class="token-container" id="token">%s</div>
-				
-				<button class="copy-btn" onclick="copyToken()">📋 Copy Token</button>
-				
-				<div class="instructions">
-					<h3>📱 Next Steps:</h3>
-					<div class="step">1. Go back to the Juno app</div>
-					<div class="step">2. Enable "Dev Mode" on the login screen</div>
-					<div class="step">3. Paste the token in the text field</div>
-					<div class="step">4. Click "Dev Login"</div>
-				</div>
-				
-				<p style="color: #666; font-size: 12px; margin-top: 30px;">
-					You can close this tab after copying the token.
-				</p>
-			</div>
-			
-			<script>
-				function copyToken() {
-					const tokenElement = document.getElementById('token');
-					const token = tokenElement.textContent;
-					
-					navigator.clipboard.writeText(token).then(function() {
-						const btn = document.querySelector('.copy-btn');
-						btn.textContent = '✅ Copied!';
-						btn.style.background = '#4CAF50';
-						
-						setTimeout(function() {
-							btn.textContent = '📋 Copy Token';
-							btn.style.background = '#00ffe7';
-						}, 2000);
-					}, function() {
-						// Fallback for older browsers
-						tokenElement.select();
-						document.execCommand('copy');
-						alert('Token copied to clipboard!');
-					});
-				}
-				
-				// Auto-select token on page load for easy copying
-				window.onload = function() {
-					const tokenElement = document.getElementById('token');
-					if (window.getSelection) {
-						const selection = window.getSelection();
-						const range = document.createRange();
-						range.selectNodeContents(tokenElement);
-						selection.removeAllRanges();
-						selection.addRange(range);
-					}
-				};
-			</script>
-		</body>
-		</html>
-	`, displayName, tokenString))
 }
 
-func HandleLogout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
+// Get current user info
+func GetCurrentUser(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Fetch user from database
+	user, err := getUserByID(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": user,
+	})
+}
+
+// Helper functions
+func generateRandomState() string {
+	bytes := make([]byte, 32)
+	rand.Read(bytes)
+	return base64.URLEncoding.EncodeToString(bytes)
+}
+
+func getUserInfoFromGoogle(token *oauth2.Token) (map[string]interface{}, error) {
+	client := googleOAuthConfig.Client(context.Background(), token)
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var userInfo map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		return nil, err
+	}
+
+	return userInfo, nil
+}
+
+func createOrUpdateUser(userInfo map[string]interface{}) (map[string]interface{}, error) {
+	// Safely extract required fields
+	email, ok := userInfo["email"].(string)
+	if !ok || email == "" {
+		return nil, fmt.Errorf("email is required")
+	}
+
+	googleID, ok := userInfo["id"].(string)
+	if !ok || googleID == "" {
+		return nil, fmt.Errorf("google ID is required")
+	}
+
+	// Handle optional fields safely with proper nil checks
+	firstName := ""
+	if fn, exists := userInfo["given_name"]; exists && fn != nil {
+		if fnStr, ok := fn.(string); ok {
+			firstName = fnStr
+		}
+	}
+
+	lastName := ""
+	if ln, exists := userInfo["family_name"]; exists && ln != nil {
+		if lnStr, ok := ln.(string); ok {
+			lastName = lnStr
+		}
+	}
+
+	picture := ""
+	if pic, exists := userInfo["picture"]; exists && pic != nil {
+		if picStr, ok := pic.(string); ok {
+			picture = picStr
+		}
+	}
+
+	// Debug: Print what we're trying to insert
+	fmt.Printf("🔍 Creating user with: email=%s, googleID=%s, firstName=%s, lastName=%s\n",
+		email, googleID, firstName, lastName)
+
+	// Check if user exists
+	var userID int
+	var username string
+	err := database.DB.QueryRow(`
+        SELECT id, username FROM users WHERE email = $1 OR google_id = $2
+    `, email, googleID).Scan(&userID, &username)
+
+	if err == sql.ErrNoRows {
+		// Create new user - FIXED: Use profile_picture_url instead of profile_picture
+		fmt.Printf("🆕 Creating new user...\n")
+		err = database.DB.QueryRow(`
+            INSERT INTO users (email, google_id, first_name, last_name, profile_picture_url, username, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+            RETURNING id, username
+        `, email, googleID, firstName, lastName, picture, email).Scan(&userID, &username)
+
+		if err != nil {
+			fmt.Printf("❌ Create user error: %v\n", err)
+			return nil, fmt.Errorf("failed to create user: %v", err)
+		}
+		fmt.Printf("✅ User created with ID: %d\n", userID)
+
+		// Create user profile as well
+		_, err = database.DB.Exec(`
+            INSERT INTO user_profiles (user_id, school, onboarding_completed, onboarding_step)
+            VALUES ($1, 'Freehold High School', false, 0)
+        `, userID)
+
+		if err != nil {
+			fmt.Printf("❌ Create user profile error: %v\n", err)
+			return nil, fmt.Errorf("failed to create user profile: %v", err)
+		}
+		fmt.Printf("✅ User profile created\n")
+
+	} else if err != nil {
+		fmt.Printf("❌ Database query error: %v\n", err)
+		return nil, fmt.Errorf("database error: %v", err)
+	} else {
+		// Update existing user - FIXED: Use profile_picture_url
+		fmt.Printf("🔄 Updating existing user ID: %d\n", userID)
+		_, err = database.DB.Exec(`
+            UPDATE users SET 
+                google_id = $1, first_name = $2, last_name = $3, 
+                profile_picture_url = $4, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $5
+        `, googleID, firstName, lastName, picture, userID)
+
+		if err != nil {
+			fmt.Printf("❌ Update user error: %v\n", err)
+			return nil, fmt.Errorf("failed to update user: %v", err)
+		}
+		fmt.Printf("✅ User updated\n")
+	}
+
+	return map[string]interface{}{
+		"id":        userID,
+		"email":     email,
+		"firstName": firstName,
+		"lastName":  lastName,
+		"username":  username,
+		"picture":   picture,
+	}, nil
+}
+
+func generateJWTToken(user map[string]interface{}, secret string) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id":    user["id"],
+		"email":      user["email"],
+		"username":   user["username"],
+		"first_name": user["firstName"],
+		"last_name":  user["lastName"],
+		"exp":        time.Now().Add(time.Hour * 24 * 7).Unix(), // 7 days
+		"iat":        time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+func getUserByID(userIDStr string) (map[string]interface{}, error) {
+	var user struct {
+		ID        int    `json:"id"`
+		Email     string `json:"email"`
+		FirstName string `json:"firstName"`
+		LastName  string `json:"lastName"`
+		Username  string `json:"username"`
+		Picture   string `json:"picture"`
+	}
+
+	err := database.DB.QueryRow(`
+        SELECT id, email, first_name, last_name, username, profile_picture
+        FROM users WHERE id = $1
+    `, userIDStr).Scan(&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.Username, &user.Picture)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"id":        user.ID,
+		"email":     user.Email,
+		"firstName": user.FirstName,
+		"lastName":  user.LastName,
+		"username":  user.Username,
+		"picture":   user.Picture,
+	}, nil
 }

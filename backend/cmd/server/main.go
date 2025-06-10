@@ -2,6 +2,7 @@ package main
 
 import (
 	"juno-backend/configs"
+	"juno-backend/internal/auth"
 	"juno-backend/internal/database"
 	"juno-backend/internal/routes"
 	"log"
@@ -9,35 +10,36 @@ import (
 )
 
 func main() {
-	// Load config
+	log.Printf("🚗 Starting Juno Backend - Clean Build v2")
+
+	// Load your existing .env configuration
 	cfg := configs.Load()
+	log.Printf("✅ Configuration loaded")
 
-	// Initialize database
-	log.Printf("🔌 Initializing database...")
+	// Connect to your existing Cloud SQL database
 	database.InitDB(cfg)
+	log.Printf("✅ Database connected")
 
-	// Setup routes (this now includes CORS and OAuth initialization)
-	log.Printf("🛣️ Setting up routes...")
-	r := routes.SetupRoutes(cfg)
+	// Initialize OAuth configuration
+	auth.InitOAuth(cfg)
+	log.Printf("✅ OAuth initialized")
 
-	// Determine port
+	// Setup clean routes
+	router := routes.SetupRoutes(cfg)
+
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = cfg.Port
-		if port == "" {
-			port = "8080"
-		}
+		port = "8080"
 	}
 
-	log.Printf("🚀 Server running on port %s", port)
-
-	// Log different URLs based on environment
+	log.Printf("🚀 Server starting on port %s", port)
 	if os.Getenv("K_SERVICE") != "" {
-		log.Printf("🌐 Running on Google Cloud Run")
-		log.Printf("🔗 OAuth URL: https://[your-service-url]/auth/google")
+		log.Printf("🔗 Production URL: https://juno-backend-587837548118.us-east4.run.app")
+		log.Printf("🔐 OAuth URL: https://juno-backend-587837548118.us-east4.run.app/auth/google")
 	} else {
-		log.Printf("🔗 OAuth URL: http://localhost:%s/auth/google", port)
+		log.Printf("🔗 Local URL: http://localhost:%s", port)
+		log.Printf("🔐 OAuth URL: http://localhost:%s/auth/google", port)
 	}
 
-	r.Run(":" + port)
+	router.Run(":" + port)
 }

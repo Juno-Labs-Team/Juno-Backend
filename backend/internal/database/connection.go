@@ -18,34 +18,31 @@ func InitDB(cfg *configs.Config) {
 
 	// Check if running on Google Cloud Run
 	if os.Getenv("K_SERVICE") != "" {
-		// Use Unix socket for Cloud SQL Proxy connection
-		// cfg.DBHost contains the full connection name: juno-rideshare-461800:us-east4:juno-production-db
-		dbURL = fmt.Sprintf("host=/cloudsql/%s user=%s password=%s dbname=%s sslmode=disable",
-			cfg.DBHost, // Just use the connection name directly
-			cfg.DBUser,
-			cfg.DBPassword,
-			cfg.DBName)
-		log.Printf("🔗 Using Cloud SQL socket: /cloudsql/%s", cfg.DBHost)
+		// Production: Use Unix socket for Cloud SQL
+		dbURL = fmt.Sprintf("host=/cloudsql/juno-rideshare-461800:us-east4:juno-production-db user=%s password=%s dbname=%s sslmode=disable",
+			cfg.DBUser, cfg.DBPassword, cfg.DBName)
+		log.Printf("🔗 Using Cloud SQL socket (production)")
 	} else {
-		// Use TCP connection for local development with Cloud SQL
+		// Local development: Use direct IP from .env file
 		dbURL = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
 			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
-		log.Printf("🔗 Using TCP connection to: %s:%s", cfg.DBHost, cfg.DBPort)
+		log.Printf("🔗 Using direct IP: %s:%s", cfg.DBHost, cfg.DBPort)
 	}
 
 	DB, err = sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatal("Error connecting to database:", err)
+		log.Fatalf("❌ Failed to connect to database: %v", err)
 	}
 
+	// Set connection pool settings
 	DB.SetMaxOpenConns(25)
 	DB.SetMaxIdleConns(5)
 
 	if err = DB.Ping(); err != nil {
-		log.Fatal("Error pinging database:", err)
+		log.Fatalf("❌ Failed to ping database: %v", err)
 	}
 
-	log.Println("✅ Connected to PostgreSQL database")
+	log.Printf("✅ Database connected successfully")
 }
 
 func GetDB() *sql.DB {
