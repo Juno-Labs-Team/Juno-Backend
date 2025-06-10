@@ -18,7 +18,7 @@ Especially useful since students are getting their driver's licenses,
   - Original: Node.js (JS) ☕️
   - Moving to: Go (because Go is just better for this, efficiency, less pain, etc) 
 - **Auth:** Google OAuth (sign in with Google only) 🔒
-- **Database:** PostgreSQL (hosted on DigitalOcean, already set up) 🐘
+- **Database:** PostgreSQL (google cloud)
 
 ## Features  ⚡
 
