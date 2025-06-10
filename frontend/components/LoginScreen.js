@@ -49,19 +49,24 @@ const LoginScreen = ({ navigation }) => {
     
     try {
       setLoading(true);
-      // Use loginWithToken instead of login
+      console.log('🔑 Dev login starting with token:', token.substring(0, 20) + '...');
+      
+      // Use loginWithToken from AuthContext
       const result = await loginWithToken(token.trim());
       
+      console.log('🔍 Login result:', result);
+      
       if (result.success) {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Main' }], // Changed from 'Home' to 'Main'
-        });
+        console.log('✅ Dev login successful');
+        // Don't navigate manually - App.js will handle redirect automatically
+        // when user state changes in AuthContext
       } else {
+        console.error('❌ Dev login failed:', result.error);
         Alert.alert('Login Failed', result.error || 'Invalid token');
       }
     } catch (error) {
-      Alert.alert('Login Failed', 'Invalid token');
+      console.error('❌ Dev login error:', error);
+      Alert.alert('Login Failed', error.message || 'Invalid token');
     } finally {
       setLoading(false);
     }
