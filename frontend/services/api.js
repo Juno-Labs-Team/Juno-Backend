@@ -1,36 +1,35 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Production-ready API URL detection
-const API_BASE_URL = 'https://juno-backend-587837548118.us-east4.run.app';
+const getApiBaseUrl = () => {
+  // Always use your deployed backend
+  return 'https://juno-backend-587837548118.us-east4.run.app';
+};
 
+const API_BASE_URL = getApiBaseUrl();
 console.log('🌐 Frontend API Base URL:', API_BASE_URL);
 
 class ApiClient {
   constructor() {
-    this.baseURL = 'https://juno-backend-587837548118.us-east4.run.app';
+    this.baseURL = getApiBaseUrl();
     this.authToken = null;
+  }
+
+  async getAuthToken() {
+    if (!this.authToken) {
+      try {
+        this.authToken = await AsyncStorage.getItem('authToken');
+      } catch (error) {
+        console.error('Failed to get auth token from storage:', error);
+        return null;
+      }
+    }
+    return this.authToken;
   }
 
   setAuthToken(token) {
     this.authToken = token;
-  }
-
-  async getAuthToken() {
-    if (this.authToken) {
-      return this.authToken;
-    }
-    
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (token) {
-        this.authToken = token;
-        return token;
-      }
-    } catch (error) {
-      console.error('Failed to get auth token:', error);
-    }
-    
-    return null;
+    console.log('🔑 API Client token set:', token ? 'YES' : 'NO');
   }
 
   async request(endpoint, options = {}) {
@@ -39,11 +38,18 @@ class ApiClient {
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
     };
+
+    // Add Authorization header if token exists
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('🔑 Request includes auth token');
+    } else {
+      console.log('⚠️ No auth token for request');
+    }
 
     const fullUrl = `${this.baseURL}${endpoint}`;
     console.log(`🌐 [${options.method || 'GET'}] ${fullUrl}`);
@@ -73,7 +79,7 @@ class ApiClient {
       }
 
       const result = await response.json();
-      console.log(`✅ [${options.method || 'GET'}] Success`);
+      console.log(`✅ [${options.method || 'GET'}] Success:`, result);
       return result;
     } catch (error) {
       console.error(`❌ [${options.method || 'GET'}] ${fullUrl} failed:`, error.message);
@@ -191,26 +197,26 @@ class ApiClient {
     });
   }
 
-  // Location methods
+  async cancelRide(rideId) {
+    return this.request(`/api/rides/${rideId}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  // Location methods (for future)
   async searchLocations(query) {
-    return this.request(`/api/maps/geocode?address=${encodeURIComponent(query)}`);
+    // Placeholder for location search
+    return { locations: [] };
   }
 
   async getSavedLocations() {
-    return this.request('/api/locations');
+    // Placeholder for saved locations
+    return { locations: [] };
   }
 
   async saveLocation(locationData) {
-    return this.request('/api/locations', {
-      method: 'POST',
-      body: JSON.stringify(locationData)
-    });
-  }
-
-  async deleteLocation(locationId) {
-    return this.request(`/api/locations/${locationId}`, {
-      method: 'DELETE'
-    });
+    // Placeholder for save location
+    return { success: true };
   }
 }
 
