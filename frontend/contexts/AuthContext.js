@@ -167,15 +167,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    console.log('🚪 Starting logout process...');
+    console.log('🚪 Starting complete logout process...');
     
     try {
-      // Step 1: Clear local state immediately
+      // Step 1: Clear local state IMMEDIATELY (user loses access instantly)
       setUser(null);
       setNeedsOnboarding(false);
       setOnboardingStep(0);
       
-      // Step 2: Clear stored data
+      // Step 2: Clear all stored authentication data
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('onboardingComplete');
       await AsyncStorage.removeItem('profileData');
@@ -183,15 +183,18 @@ export const AuthProvider = ({ children }) => {
       // Step 3: Clear API client token
       ApiClient.setAuthToken(null);
       
-      console.log('✅ Local logout completed');
+      console.log('✅ Local state cleared - user is now logged out');
       
-      // Step 4: Try API logout (but don't fail if this fails)
+      // Step 4: Try to notify server (optional - graceful if it fails)
       try {
-        await ApiClient.logout();
-        console.log('✅ API logout successful');
-      } catch (apiError) {
-        console.log('⚠️ API logout failed, but user is logged out locally:', apiError.message);
+        const result = await ApiClient.logout();
+        console.log('✅ Server logout successful:', result.message);
+      } catch (serverError) {
+        console.log('⚠️ Server logout failed (but local logout succeeded):', serverError.message);
+        // Don't throw - local logout is sufficient
       }
+      
+      console.log('🎉 Complete logout process finished');
       
     } catch (error) {
       console.error('❌ Logout error:', error);
@@ -200,12 +203,15 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setNeedsOnboarding(false);
       setOnboardingStep(0);
+      
       try {
         await AsyncStorage.clear();
         ApiClient.setAuthToken(null);
       } catch (forceError) {
-        console.error('❌ Force logout failed:', forceError);
+        console.error('❌ Force clear failed:', forceError);
       }
+      
+      console.log('🔄 Emergency logout completed');
     }
   };
 
