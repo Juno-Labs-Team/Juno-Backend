@@ -93,16 +93,16 @@ const OnboardingScreen = () => {
         lastName: profileData.lastName,
         username: user?.username || profileData.firstName.toLowerCase(),
         phone: profileData.phone,
-        profilePicture: profileData.profilePicture,
+        profile_picture_url: profileData.profilePicture, // Match backend field name
         school: profileData.school,
-        classYear: profileData.classYear,
+        class_year: profileData.classYear, // Match backend field name
         major: profileData.major,
-        hasCar: profileData.hasCar,
-        carMake: profileData.carMake,
-        carModel: profileData.carModel,
-        carColor: profileData.carColor,
-        carYear: parseInt(profileData.carYear) || 0,
-        maxPassengers: profileData.maxPassengers,
+        has_car: profileData.hasCar, // Match backend field name
+        car_make: profileData.carMake, // Match backend field name
+        car_model: profileData.carModel, // Match backend field name
+        car_color: profileData.carColor, // Match backend field name
+        car_year: parseInt(profileData.carYear) || 0,
+        max_passengers: profileData.maxPassengers,
         bio: profileData.bio,
       });
 
