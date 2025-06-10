@@ -75,6 +75,7 @@ const SearchScreen = ({ navigation }) => {
   const loadFriends = async () => {
     try {
       const response = await apiClient.getFriends();
+      // Your backend returns { friends: [...], count: 0, message: "..." }
       setFriends(response.friends || []);
     } catch (error) {
       console.error('Failed to load friends:', error);
@@ -94,6 +95,7 @@ const SearchScreen = ({ navigation }) => {
     try {
       setLoading(true);
       const response = await apiClient.searchUsers(searchQuery);
+      // Your backend returns { users: [...], count: 0, query: "...", message: "..." }
       setSearchResults(response.users || []);
     } catch (error) {
       console.error('Search failed:', error);

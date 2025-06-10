@@ -25,16 +25,18 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkIfOnboardingNeeded = (userData) => {
-    // If backend explicitly says onboarding is complete, trust it
-    if (userData.onboardingCompleted === true) {
-      return false;
-    }
+    console.log('🔍 Checking onboarding for user:', userData);
     
-    // Check for missing essential fields
+    // Your backend returns different field names
     const hasBasicInfo = userData.firstName && userData.lastName && userData.username;
     const hasSchoolInfo = userData.school && userData.classYear;
     
-    // Determine onboarding step
+    // Check if backend says onboarding is complete
+    if (userData.onboardingCompleted) {
+      return false;
+    }
+    
+    // Determine onboarding step based on missing data
     if (!hasBasicInfo) {
       setOnboardingStep(1);
       return true;
@@ -54,7 +56,7 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         ApiClient.setAuthToken(token);
         const response = await ApiClient.getProfile();
-        const userData = response.profile;
+        const userData = response.profile || response; // Handle both formats
         
         console.log('✅ Profile loaded:', userData.username);
         setUser(userData);

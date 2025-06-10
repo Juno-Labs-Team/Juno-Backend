@@ -136,10 +136,15 @@ class ApiClient {
     return this.request(`/api/users/search?q=${encodeURIComponent(query)}`);
   }
 
+  async getFriendRequests() {
+    return this.request('/api/friends/requests');
+  }
+
   // Rides methods
   async getRides() {
     try {
       const result = await this.request('/api/rides');
+      // Your backend returns { rides: [...], count: 2, message: "..." }
       return result.rides || [];
     } catch (error) {
       console.error('Failed to get rides:', error);
@@ -148,9 +153,25 @@ class ApiClient {
   }
 
   async createRide(rideData) {
+    // Transform frontend data to match your backend schema
+    const backendData = {
+      origin_address: rideData.origin?.address || rideData.origin,
+      destination_address: rideData.destination?.address || rideData.destination,
+      departure_time: rideData.departureTime,
+      max_passengers: rideData.maxPassengers,
+      price_per_seat: rideData.pricePerSeat,
+      description: rideData.description,
+      origin_lat: rideData.origin?.lat,
+      origin_lng: rideData.origin?.lng,
+      destination_lat: rideData.destination?.lat,
+      destination_lng: rideData.destination?.lng,
+      only_friends: rideData.onlyFriends || false,
+      school_related: rideData.schoolRelated || false,
+    };
+    
     return this.request('/api/rides', {
       method: 'POST',
-      body: JSON.stringify(rideData),
+      body: JSON.stringify(backendData),
     });
   }
 
@@ -166,7 +187,7 @@ class ApiClient {
 
   async leaveRide(rideId) {
     return this.request(`/api/rides/${rideId}/leave`, {
-      method: 'POST',
+      method: 'DELETE',  // Your backend expects DELETE, not POST
     });
   }
 
