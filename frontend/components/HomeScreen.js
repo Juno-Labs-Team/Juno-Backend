@@ -46,8 +46,6 @@ const MAP_WIDGET_HTML = (rides) => `
 <body>
   <div id="map"></div>
   <script>
-    const originName = "Freehold High School";
-    const originLatLng = { lat: 40.260393, lng: -74.273017 };
     const scheduledEvents = ${JSON.stringify(rides)};
     const ultraMinimalDarkMapStyles = [
         { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
@@ -68,6 +66,7 @@ const MAP_WIDGET_HTML = (rides) => `
     const distinctColors = [
         "#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFD133", "#33FFF5", "#8D33FF", "#FF8C33"
     ];
+
     function getInfoContent(event) {
         return \`
             <div style="
@@ -82,20 +81,20 @@ const MAP_WIDGET_HTML = (rides) => `
                 box-sizing: border-box;
             ">
                 <div style="display:flex;align-items:center;gap:12px;font-size:1.22em;font-weight:700;margin-bottom:12px;">
-                    \${event.rideEmoji ? \`<span style="font-size:1.4em;">\${event.rideEmoji}</span>\` : ""}
-                    <span>\${event.rideName}</span>
+                    \${event.emoji ? \`<span style="font-size:1.4em;">\${event.emoji}</span>\` : ""}
+                    <span>\${event.title || ""}</span>
                 </div>
                 <div style="margin-bottom:14px;">
                     <span style="display:inline-block;border-radius:8px;padding:4px 15px;font-size:1em;color:#\${event.color};border:1.7px solid #\${event.color};background:none;">
-                        To: \${event.location}
+                        To: \${(event.location && event.location.destination && event.location.destination.name) || event.destination || ""}
                     </span>
                 </div>
                 <div style="margin-bottom:4px;font-size:0.98em;">
                     <b>Date:</b> \${event.date}
                     <span style="margin-left:18px;"><b>Time:</b> \${event.time}</span>
                 </div>
-                <div style="margin-bottom:4px;font-size:0.98em;"><b>Driver:</b> \${event.driver}</div>
-                <div style="margin-bottom:8px;font-size:0.98em;"><b>Seats:</b> \${event.currentNumPassengers} / \${event.passengers}</div>
+                <div style="margin-bottom:4px;font-size:0.98em;"><b>Driver:</b> \${event.driverName || (event.driver ? (event.driver.firstName + " " + event.driver.lastName) : "")}</div>
+                <div style="margin-bottom:8px;font-size:0.98em;"><b>Seats:</b> \${typeof event.currentPassengers !== 'undefined' ? event.currentPassengers : 0} / \${typeof event.maxPassengers !== 'undefined' ? event.maxPassengers : 0}</div>
                 \${
                     event.waypoints && event.waypoints.length
                         ? \`<div style="margin-top:8px;font-size:0.97em;">
@@ -110,9 +109,10 @@ const MAP_WIDGET_HTML = (rides) => `
             </div>
         \`;
     }
+
     function renderEventsOnMap(events) {
         const map = new google.maps.Map(document.getElementById("map"), {
-            center: originLatLng,
+            center: { lat: 40.260393, lng: -74.273017 },
             zoom: 8,
             styles: ultraMinimalDarkMapStyles,
             mapTypeControl: false,
@@ -120,7 +120,7 @@ const MAP_WIDGET_HTML = (rides) => `
             fullscreenControl: false
         });
         new google.maps.Marker({
-            position: originLatLng,
+            position: { lat: 40.260393, lng: -74.273017 },
             map,
             icon: {
                 path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
@@ -133,8 +133,15 @@ const MAP_WIDGET_HTML = (rides) => `
         });
         const infowindow = new google.maps.InfoWindow();
         events.forEach((event, index) => {
-            if (!event.coordinates) return;
-            const destLatLng = event.coordinates;
+            // Use the ride's own origin if available, otherwise default to Freehold High School
+            const originLatLng = event.location && event.location.origin
+              ? { lat: event.location.origin.lat, lng: event.location.origin.lng }
+              : { lat: 40.260393, lng: -74.273017 };
+
+            const destLatLng = event.location && event.location.destination
+              ? { lat: event.location.destination.lat, lng: event.location.destination.lng }
+              : null;
+            if (!destLatLng) return;
             const color = distinctColors[index % distinctColors.length];
             event.color = color.replace("#", "");
             const marker = new google.maps.Marker({
@@ -154,13 +161,14 @@ const MAP_WIDGET_HTML = (rides) => `
                 infowindow.open(map, marker);
             });
             map.addListener('click', function() { infowindow.close(); });
+
             let waypoints = [];
             if (event.waypoints && event.waypoints.length) {
                 waypoints = event.waypoints.map(wp => ({
                     location: { lat: wp.lat, lng: wp.lng }, stopover: true
                 }));
                 event.waypoints.forEach((wp) => {
-                    new google.maps.Marker({
+                    const waypointMarker = new google.maps.Marker({
                         position: { lat: wp.lat, lng: wp.lng },
                         map,
                         icon: {
@@ -171,6 +179,13 @@ const MAP_WIDGET_HTML = (rides) => `
                             strokeColor: "#fff",
                             strokeWeight: 1.2
                         }
+                    });
+                    // Info window for waypoint
+                    const wpInfoWindow = new google.maps.InfoWindow({
+                        content: wp.name || "Stop"
+                    });
+                    waypointMarker.addListener('click', () => {
+                        wpInfoWindow.open(map, waypointMarker);
                     });
                 });
             }
@@ -214,8 +229,6 @@ if (Platform.OS !== 'web') {
   WebView = require('react-native-webview').WebView;
 }
 
-const GOOGLE_MAPS_API_KEY = 'AIzaSyBSu-YNiUYtkXwp-zN3UybyynXvD3KiGPw'; // For the widget
-
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [rides, setRides] = useState([]);
@@ -231,16 +244,13 @@ const HomeScreen = ({ navigation }) => {
   const fetchRides = async () => {
     try {
       setLoading(true);
-      // Use your actual DB-connected API endpoint here.
       const ridesData = await apiClient.getRides();
       setRides(ridesData);
-
-      // If each ride has lat/lng, pass those to the map widget
-      setMapHtml(MAP_WIDGET_HTML(ridesData, GOOGLE_MAPS_API_KEY));
+      setMapHtml(MAP_WIDGET_HTML(ridesData));
     } catch (error) {
       console.error('Failed to fetch rides:', error);
       setRides([]);
-      setMapHtml(MAP_WIDGET_HTML([], GOOGLE_MAPS_API_KEY));
+      setMapHtml(MAP_WIDGET_HTML([]));
     } finally {
       setLoading(false);
     }
@@ -317,7 +327,8 @@ const HomeScreen = ({ navigation }) => {
       >
         <View style={styles.cardHeader}>
           <Text style={styles.rideTitle}>
-            {item.destination || item.rideName || 'Ride'} {item.emoji || item.rideEmoji || '🚗'}
+            {item.title || ""}
+            {item.emoji || item.rideEmoji || ' 🚗'}
           </Text>
           <View style={styles.statusBadge}>
             <Text style={styles.statusText}>
@@ -335,16 +346,26 @@ const HomeScreen = ({ navigation }) => {
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="location-outline" size={16} color="#fff" />
-              <Text style={styles.detailText}>{(item.origin ? `${item.origin} → ` : '')}{item.destination || item.location}</Text>
+              <Text style={styles.detailText}>
+                {(item.origin ? `${item.origin} → ` : '')}
+                {(item.location && item.location.destination && item.location.destination.name) || item.destination || ''}
+              </Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="person-outline" size={16} color="#fff" />
-              <Text style={styles.detailText}>Driver: {item.driverName || item.driver}</Text>
+              <Text style={styles.detailText}>
+                {item.driverName ||
+                  (item.driver
+                    ? [item.driver.firstName, item.driver.lastName].filter(Boolean).join(" ")
+                    : "")}
+              </Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="people-outline" size={16} color="#fff" />
               <Text style={styles.detailText}>
-                {(item.maxPassengers || item.passengers)} seats ({availableSeats} available)
+                {typeof item.maxPassengers !== 'undefined'
+                  ? item.maxPassengers
+                  : (item.passengers || 0)} seats ({availableSeats} available)
               </Text>
             </View>
             {item.pricePerSeat && (
