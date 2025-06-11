@@ -8,14 +8,284 @@ import {
   Animated,
   RefreshControl,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../services/api';
-import MapWidget from '../../frontend/components/MapWidget';
 
 const NEON = '#00ffe7';
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+// The entire HTML for the map widget as a string
+const MAP_WIDGET_HTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NJ Routes Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body { height: 100%; }
+    body {
+      margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+      height: 100vh; background: #0d0d0d;
+    }
+    #map { height: 100vh; width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
+    .event-overlay-collapsible { pointer-events: auto; max-width: 170px; user-select: none; min-width: 60px; box-sizing: border-box; }
+    @media (max-width: 600px) {
+      .event-overlay-collapsible { font-size: 11px; padding: 3px 5px; max-width: 110px; }
+    }
+    .gm-style-iw, .gm-style-iw-c, .gm-style-iw-d { background: transparent !important; box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; clip-path: inset(0 19px 12px 0); }
+    .gm-style-iw-tc > div, .gm-style-iw-t::after, .gm-style-iw-t::before { display: none !important; }
+    .gm-ui-hover-effect { top: 40px !important; right: 23px !important; left: auto !important; width: 32px !important; height: 32px !important; z-index: 1 !important; }
+    .gm-ui-hover-effect > span { margin: 4px !important; width: 24px !important; height: 24px !important; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    const originName = "Freehold High School";
+    const originLatLng = { lat: 40.260393, lng: -74.273017 };
+    const scheduledEvents = [
+        {
+          color: "A53860",
+          rideEmoji: "🚗",
+          rideName: "Morning Commute to School",
+          date: "2025-06-04",
+          time: "07:30 AM",
+          location: "Freehold Township High School",
+          coordinates: { lat: 40.0000, lng: -74.2732 },
+          driver: "Emily Carter",
+          passengers: 3,
+          currentNumPassengers: 3
+        },
+        {
+          color: "A53860",
+          rideEmoji: "",
+          rideName: "Weekend Group Carpool",
+          date: "2025-06-07",
+          time: "10:00 AM",
+          location: "Monmouth Mall",
+          coordinates: { lat: 40.2895, lng: -74.0565 },
+          driver: "Jake Martinez",
+          passengers: 4,
+          currentNumPassengers: 1
+        },
+        {
+          color: "42d415",
+          rideEmoji: "",
+          rideName: "Soccer Practice Pickup",
+          date: "2025-06-05",
+          time: "04:45 PM",
+          location: "Freehold Soccer Complex",
+          coordinates: { lat: 40.2418, lng: -74.2882 },
+          driver: "Sophia Lee",
+          passengers: 2,
+          currentNumPassengers: 0
+        },
+        {
+          color: "F7374F",
+          rideEmoji: "🎤",
+          rideName: "Concert Road Trip",
+          date: "2025-06-08",
+          time: "06:30 PM",
+          location: "PNC Bank Arts Center",
+          coordinates: { lat: 40.3929, lng: -74.1710 },
+          driver: "Ryan Thompson",
+          passengers: 5,
+          currentNumPassengers: 0
+        },
+        {
+          color: "6cd4c1",
+          rideEmoji: "",
+          rideName: "Library Study Group",
+          date: "2025-06-06",
+          time: "02:00 PM",
+          location: "Freehold Public Library",
+          coordinates: { lat: 40.2601, lng: -74.2732 },
+          driver: "Lucas Scott",
+          passengers: 3,
+          currentNumPassengers: 0
+        }
+      ];
+
+    const ultraMinimalDarkMapStyles = [
+        { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+        { elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "administrative", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "poi.park", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "road.highway", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "water", elementType: "labels", stylers: [{ visibility: "off" }] },
+        { featureType: "poi", elementType: "geometry", stylers: [{ color: "#181818" }] },
+        { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
+        { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+        { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+        { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#242f3e" }] }
+    ];
+
+    const distinctColors = [
+        "#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFD133", "#33FFF5", "#8D33FF", "#FF8C33"
+    ];
+
+    function getInfoContent(event) {
+        return \`
+            <div style="
+                font-family: 'Segoe UI', Arial, sans-serif;
+                min-width:240px;
+                max-width:340px;
+                border-radius: 16px;
+                border: 3px solid #\${event.color};
+                background: #23293a;
+                color: #f6f7fa;
+                padding: 18px 22px 15px 22px;
+                box-sizing: border-box;
+            ">
+                <div style="display:flex;align-items:center;gap:12px;font-size:1.22em;font-weight:700;margin-bottom:12px;">
+                    \${event.rideEmoji ? \`<span style="font-size:1.4em;">\${event.rideEmoji}</span>\` : ""}
+                    <span>\${event.rideName}</span>
+                </div>
+                <div style="margin-bottom:14px;">
+                    <span style="display:inline-block;border-radius:8px;padding:4px 15px;font-size:1em;color:#\${event.color};border:1.7px solid #\${event.color};background:none;">
+                        To: \${event.location}
+                    </span>
+                </div>
+                <div style="margin-bottom:4px;font-size:0.98em;">
+                    <b>Date:</b> \${event.date}
+                    <span style="margin-left:18px;"><b>Time:</b> \${event.time}</span>
+                </div>
+                <div style="margin-bottom:4px;font-size:0.98em;"><b>Driver:</b> \${event.driver}</div>
+                <div style="margin-bottom:8px;font-size:0.98em;"><b>Seats:</b> \${event.currentNumPassengers} / \${event.passengers}</div>
+                \${
+                    event.waypoints && event.waypoints.length
+                        ? \`<div style="margin-top:8px;font-size:0.97em;">
+                                <b>Stops:</b> \${
+                                    event.waypoints.map(wp =>
+                                        \`<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px 2px 8px;border-radius:7px;background:none;color:#\${event.color};font-size:0.94em;border:1px solid #\${event.color};">\${wp.name}</span>\`
+                                    ).join("")
+                                }
+                            </div>\`
+                        : ""
+                }
+            </div>
+        \`;
+    }
+
+    function renderEventsOnMap(events) {
+        const map = new google.maps.Map(document.getElementById("map"), {
+            center: originLatLng,
+            zoom: 8,
+            styles: ultraMinimalDarkMapStyles,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false
+        });
+
+        new google.maps.Marker({
+            position: originLatLng,
+            map,
+            icon: {
+                path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+                scale: 5,
+                fillColor: "#FFFF33",
+                fillOpacity: 1,
+                strokeColor: "#222",
+                strokeWeight: 2
+            }
+        });
+
+        const infowindow = new google.maps.InfoWindow();
+
+        events.forEach((event, index) => {
+            if (!event.coordinates) return;
+            const destLatLng = event.coordinates;
+            const color = distinctColors[index % distinctColors.length];
+            event.color = color.replace("#", "");
+
+            const marker = new google.maps.Marker({
+                position: destLatLng,
+                map,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: color,
+                    fillOpacity: 1,
+                    strokeColor: "#fff",
+                    strokeWeight: 2
+                }
+            });
+
+            marker.addListener("click", function () {
+                infowindow.setContent(getInfoContent(event));
+                infowindow.open(map, marker);
+            });
+            map.addListener('click', function() { infowindow.close(); });
+
+            let waypoints = [];
+            if (event.waypoints && event.waypoints.length) {
+                waypoints = event.waypoints.map(wp => ({
+                    location: { lat: wp.lat, lng: wp.lng }, stopover: true
+                }));
+                event.waypoints.forEach((wp) => {
+                    new google.maps.Marker({
+                        position: { lat: wp.lat, lng: wp.lng },
+                        map,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 5,
+                            fillColor: color,
+                            fillOpacity: 0.55,
+                            strokeColor: "#fff",
+                            strokeWeight: 1.2
+                        }
+                    });
+                });
+            }
+
+            const directionsService = new google.maps.DirectionsService();
+            const directionsRenderer = new google.maps.DirectionsRenderer({
+                map: map,
+                suppressMarkers: true,
+                polylineOptions: {
+                    strokeColor: color,
+                    strokeOpacity: 1.0,
+                    strokeWeight: 6
+                }
+            });
+
+            directionsService.route(
+                {
+                    origin: originLatLng,
+                    destination: destLatLng,
+                    waypoints: waypoints,
+                    travelMode: google.maps.TravelMode.DRIVING
+                },
+                (result, status) => {
+                    if (status === google.maps.DirectionsStatus.OK) {
+                        directionsRenderer.setDirections(result);
+                    } else {
+                        console.error("Directions request failed due to: " + status);
+                    }
+                }
+            );
+        });
+    }
+
+    function initMap() { renderEventsOnMap(scheduledEvents); }
+    window.initMap = initMap;
+  </script>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEgktHm0Qax3jLSu-Ne_if9PIyyFVpTkY&callback=initMap"></script>
+</body>
+</html>
+`;
+
+let WebView;
+if (Platform.OS !== 'web') {
+  WebView = require('react-native-webview').WebView;
+}
 
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -166,6 +436,68 @@ const HomeScreen = ({ navigation }) => {
     );
   };
 
+  // Embedded MapWidget logic (web: iframe, native: WebView)
+  const MapEmbed = () => {
+    const [iframeError, setIframeError] = useState(false);
+
+    if (Platform.OS === 'web') {
+      // On web, use srcDoc if supported, fallback to data URI if not
+      return (
+        <View style={styles.rightWidget}>
+          {!iframeError ? (
+            <iframe
+              srcDoc={MAP_WIDGET_HTML}
+              style={{
+                width: '100%',
+                height: '100%',
+                minHeight: 400,
+                borderRadius: 16,
+                border: 'none',
+                overflow: 'hidden',
+                background: '#0d0d0d'
+              }}
+              title="Map Widget"
+              onError={() => setIframeError(true)}
+            />
+          ) : (
+            <View style={{flex:1, alignItems:'center', justifyContent:'center'}}>
+              <Text style={{ color: '#fff', padding: 16, fontSize: 16 }}>
+                Map could not be loaded.
+              </Text>
+            </View>
+          )}
+        </View>
+      );
+    } else if (WebView) {
+      // On native, use WebView with HTML injected directly
+      return (
+        <View style={styles.rightWidget}>
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: MAP_WIDGET_HTML }}
+            style={{
+              flex: 1,
+              width: '100%',
+              height: '100%',
+              borderRadius: 16,
+              overflow: 'hidden',
+              backgroundColor: '#0d0d0d'
+            }}
+            javaScriptEnabled
+            domStorageEnabled
+            startInLoadingState
+          />
+        </View>
+      );
+    }
+    // Fallback
+    return (
+      <View style={styles.rightWidget}>
+        <Text style={{ color: '#fff' }}>Map is not available.</Text>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -208,7 +540,7 @@ const HomeScreen = ({ navigation }) => {
             )}
           />
         </View>
-        <MapWidget />
+        <MapEmbed />
       </View>
     </View>
   );
@@ -322,6 +654,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  rightWidget: {
+    width: SCREEN_WIDTH * 0.5,
+    minHeight: 400,
+    borderRadius: 16,
+    marginLeft: 12,
+    overflow: 'hidden',
+    backgroundColor: '#10162d',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
 });
 
