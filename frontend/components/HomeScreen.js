@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,8 +18,8 @@ import apiClient from '../services/api';
 const NEON = '#00ffe7';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-// The entire HTML for the map widget as a string
-const MAP_WIDGET_HTML = `
+// The map widget will get events from API, not hardcoded.
+const MAP_WIDGET_HTML = (rides) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -47,69 +48,7 @@ const MAP_WIDGET_HTML = `
   <script>
     const originName = "Freehold High School";
     const originLatLng = { lat: 40.260393, lng: -74.273017 };
-    const scheduledEvents = [
-        {
-          color: "A53860",
-          rideEmoji: "🚗",
-          rideName: "Morning Commute to School",
-          date: "2025-06-04",
-          time: "07:30 AM",
-          location: "Freehold Township High School",
-          coordinates: { lat: 40.0000, lng: -74.2732 },
-          driver: "Emily Carter",
-          passengers: 3,
-          currentNumPassengers: 3
-        },
-        {
-          color: "A53860",
-          rideEmoji: "",
-          rideName: "Weekend Group Carpool",
-          date: "2025-06-07",
-          time: "10:00 AM",
-          location: "Monmouth Mall",
-          coordinates: { lat: 40.2895, lng: -74.0565 },
-          driver: "Jake Martinez",
-          passengers: 4,
-          currentNumPassengers: 1
-        },
-        {
-          color: "42d415",
-          rideEmoji: "",
-          rideName: "Soccer Practice Pickup",
-          date: "2025-06-05",
-          time: "04:45 PM",
-          location: "Freehold Soccer Complex",
-          coordinates: { lat: 40.2418, lng: -74.2882 },
-          driver: "Sophia Lee",
-          passengers: 2,
-          currentNumPassengers: 0
-        },
-        {
-          color: "F7374F",
-          rideEmoji: "🎤",
-          rideName: "Concert Road Trip",
-          date: "2025-06-08",
-          time: "06:30 PM",
-          location: "PNC Bank Arts Center",
-          coordinates: { lat: 40.3929, lng: -74.1710 },
-          driver: "Ryan Thompson",
-          passengers: 5,
-          currentNumPassengers: 0
-        },
-        {
-          color: "6cd4c1",
-          rideEmoji: "",
-          rideName: "Library Study Group",
-          date: "2025-06-06",
-          time: "02:00 PM",
-          location: "Freehold Public Library",
-          coordinates: { lat: 40.2601, lng: -74.2732 },
-          driver: "Lucas Scott",
-          passengers: 3,
-          currentNumPassengers: 0
-        }
-      ];
-
+    const scheduledEvents = ${JSON.stringify(rides)};
     const ultraMinimalDarkMapStyles = [
         { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
         { elementType: "labels", stylers: [{ visibility: "off" }] },
@@ -126,11 +65,9 @@ const MAP_WIDGET_HTML = `
         { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
         { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#242f3e" }] }
     ];
-
     const distinctColors = [
         "#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#FFD133", "#33FFF5", "#8D33FF", "#FF8C33"
     ];
-
     function getInfoContent(event) {
         return \`
             <div style="
@@ -173,7 +110,6 @@ const MAP_WIDGET_HTML = `
             </div>
         \`;
     }
-
     function renderEventsOnMap(events) {
         const map = new google.maps.Map(document.getElementById("map"), {
             center: originLatLng,
@@ -183,7 +119,6 @@ const MAP_WIDGET_HTML = `
             streetViewControl: false,
             fullscreenControl: false
         });
-
         new google.maps.Marker({
             position: originLatLng,
             map,
@@ -196,15 +131,12 @@ const MAP_WIDGET_HTML = `
                 strokeWeight: 2
             }
         });
-
         const infowindow = new google.maps.InfoWindow();
-
         events.forEach((event, index) => {
             if (!event.coordinates) return;
             const destLatLng = event.coordinates;
             const color = distinctColors[index % distinctColors.length];
             event.color = color.replace("#", "");
-
             const marker = new google.maps.Marker({
                 position: destLatLng,
                 map,
@@ -217,13 +149,11 @@ const MAP_WIDGET_HTML = `
                     strokeWeight: 2
                 }
             });
-
             marker.addListener("click", function () {
                 infowindow.setContent(getInfoContent(event));
                 infowindow.open(map, marker);
             });
             map.addListener('click', function() { infowindow.close(); });
-
             let waypoints = [];
             if (event.waypoints && event.waypoints.length) {
                 waypoints = event.waypoints.map(wp => ({
@@ -244,7 +174,6 @@ const MAP_WIDGET_HTML = `
                     });
                 });
             }
-
             const directionsService = new google.maps.DirectionsService();
             const directionsRenderer = new google.maps.DirectionsRenderer({
                 map: map,
@@ -255,7 +184,6 @@ const MAP_WIDGET_HTML = `
                     strokeWeight: 6
                 }
             });
-
             directionsService.route(
                 {
                     origin: originLatLng,
@@ -273,7 +201,6 @@ const MAP_WIDGET_HTML = `
             );
         });
     }
-
     function initMap() { renderEventsOnMap(scheduledEvents); }
     window.initMap = initMap;
   </script>
@@ -287,23 +214,33 @@ if (Platform.OS !== 'web') {
   WebView = require('react-native-webview').WebView;
 }
 
+const GOOGLE_MAPS_API_KEY = 'AIzaSyBSu-YNiUYtkXwp-zN3UybyynXvD3KiGPw'; // For the widget
+
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [mapHtml, setMapHtml] = useState('');
 
   useEffect(() => {
     fetchRides();
   }, []);
 
+  // Fetch rides from database via API client
   const fetchRides = async () => {
     try {
       setLoading(true);
+      // Use your actual DB-connected API endpoint here.
       const ridesData = await apiClient.getRides();
       setRides(ridesData);
+
+      // If each ride has lat/lng, pass those to the map widget
+      setMapHtml(MAP_WIDGET_HTML(ridesData, GOOGLE_MAPS_API_KEY));
     } catch (error) {
       console.error('Failed to fetch rides:', error);
+      setRides([]);
+      setMapHtml(MAP_WIDGET_HTML([], GOOGLE_MAPS_API_KEY));
     } finally {
       setLoading(false);
     }
@@ -341,7 +278,8 @@ const HomeScreen = ({ navigation }) => {
     const [expanded, setExpanded] = useState(false);
     const animation = useState(new Animated.Value(0))[0];
 
-    const availableSeats = (item.maxPassengers || 4) - (item.currentPassengers || 0);
+    // Map DB fields for compatibility
+    const availableSeats = (item.maxPassengers || item.passengers || 4) - (item.currentPassengers || item.currentNumPassengers || 0);
     const hasAvailableSeats = availableSeats > 0;
     const cardColor = item.color || '4285F4';
     const buttonColor = getComplementaryColor(cardColor);
@@ -379,7 +317,7 @@ const HomeScreen = ({ navigation }) => {
       >
         <View style={styles.cardHeader}>
           <Text style={styles.rideTitle}>
-            {item.destination} {item.emoji || '🚗'}
+            {item.destination || item.rideName || 'Ride'} {item.emoji || item.rideEmoji || '🚗'}
           </Text>
           <View style={styles.statusBadge}>
             <Text style={styles.statusText}>
@@ -397,16 +335,16 @@ const HomeScreen = ({ navigation }) => {
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="location-outline" size={16} color="#fff" />
-              <Text style={styles.detailText}>{item.origin} → {item.destination}</Text>
+              <Text style={styles.detailText}>{(item.origin ? `${item.origin} → ` : '')}{item.destination || item.location}</Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="person-outline" size={16} color="#fff" />
-              <Text style={styles.detailText}>Driver: {item.driverName}</Text>
+              <Text style={styles.detailText}>Driver: {item.driverName || item.driver}</Text>
             </View>
             <View style={styles.detailRow}>
               <Ionicons name="people-outline" size={16} color="#fff" />
               <Text style={styles.detailText}>
-                {item.maxPassengers} seats ({availableSeats} available)
+                {(item.maxPassengers || item.passengers)} seats ({availableSeats} available)
               </Text>
             </View>
             {item.pricePerSeat && (
@@ -436,17 +374,24 @@ const HomeScreen = ({ navigation }) => {
     );
   };
 
-  // Embedded MapWidget logic (web: iframe, native: WebView)
+  // Map widget uses the dynamic HTML generated from rides
   const MapEmbed = () => {
     const [iframeError, setIframeError] = useState(false);
 
+    if (!mapHtml) {
+      return (
+        <View style={styles.rightWidget}>
+          <Text style={{ color: '#fff', padding: 24 }}>Loading map...</Text>
+        </View>
+      );
+    }
+
     if (Platform.OS === 'web') {
-      // On web, use srcDoc if supported, fallback to data URI if not
       return (
         <View style={styles.rightWidget}>
           {!iframeError ? (
             <iframe
-              srcDoc={MAP_WIDGET_HTML}
+              srcDoc={mapHtml}
               style={{
                 width: '100%',
                 height: '100%',
@@ -469,12 +414,11 @@ const HomeScreen = ({ navigation }) => {
         </View>
       );
     } else if (WebView) {
-      // On native, use WebView with HTML injected directly
       return (
         <View style={styles.rightWidget}>
           <WebView
             originWhitelist={['*']}
-            source={{ html: MAP_WIDGET_HTML }}
+            source={{ html: mapHtml }}
             style={{
               flex: 1,
               width: '100%',
@@ -490,7 +434,6 @@ const HomeScreen = ({ navigation }) => {
         </View>
       );
     }
-    // Fallback
     return (
       <View style={styles.rightWidget}>
         <Text style={{ color: '#fff' }}>Map is not available.</Text>
@@ -508,37 +451,41 @@ const HomeScreen = ({ navigation }) => {
       </View>
       <View style={styles.row}>
         <View style={styles.leftColumn}>
-          <FlatList
-            data={rides}
-            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-            renderItem={({ item }) => <RideCard item={item} />}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={NEON}
-                colors={[NEON]}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={() => (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="car-outline" size={64} color="#666" />
-                <Text style={styles.emptyTitle}>No rides available</Text>
-                <Text style={styles.emptyText}>
-                  Check back later for upcoming rides or create your own!
-                </Text>
-                <TouchableOpacity
-                  style={styles.createRideButton}
-                  onPress={() => navigation.navigate('CreateRide')}
-                >
-                  <Ionicons name="add" size={20} color="#000" />
-                  <Text style={styles.createRideText}>Create Ride</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
+          {loading ? (
+            <ActivityIndicator size="large" color={NEON} style={{marginTop: 40}} />
+          ) : (
+            <FlatList
+              data={rides}
+              keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+              renderItem={({ item }) => <RideCard item={item} />}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={NEON}
+                  colors={[NEON]}
+                />
+              }
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.listContainer}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="car-outline" size={64} color="#666" />
+                  <Text style={styles.emptyTitle}>No rides available</Text>
+                  <Text style={styles.emptyText}>
+                    Check back later for upcoming rides or create your own!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.createRideButton}
+                    onPress={() => navigation.navigate('CreateRide')}
+                  >
+                    <Ionicons name="add" size={20} color="#000" />
+                    <Text style={styles.createRideText}>Create Ride</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+          )}
         </View>
         <MapEmbed />
       </View>
