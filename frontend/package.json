@@ -4,7 +4,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "ios": "expo start --ios", 
+    "ios": "expo start --ios",
     "web": "expo start --web --port 8080",
     "build": "expo export --platform web --output-dir dist",
     "serve": "npx serve dist -s -l 8080"
@@ -13,6 +13,7 @@
     "@expo/metro-runtime": "~5.0.4",
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/datetimepicker": "8.3.0",
     "@react-navigation/bottom-tabs": "*",
     "@react-navigation/native": "7.1.10",
     "@react-navigation/native-stack": "*",
@@ -37,8 +38,7 @@
     "react-native-svg": "15.11.2",
     "react-native-system-navigation-bar": "*",
     "react-native-web": "^0.20.0",
-    "react-native-webview": "^13.14.1",
-    "@react-native-community/datetimepicker": "8.3.0"
+    "react-native-webview": "^13.14.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

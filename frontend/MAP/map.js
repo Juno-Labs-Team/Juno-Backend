@@ -17,6 +17,68 @@ const ultraMinimalDarkMapStyles = [
     { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
     { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#242f3e" }] }
 ];
+const scheduledEvents = [
+    {
+      color: "A53860",
+      rideEmoji: "🚗",
+      rideName: "Morning Commute to School",
+      date: "2025-06-04",
+      time: "07:30 AM",
+      location: "Freehold Township High School",
+      coordinates: { lat: 40.0000, lng: -74.2732 },
+      driver: "Emily Carter",
+      passengers: 3,
+      currentNumPassengers: 3
+    },
+    {
+      color: "A53860",
+      rideEmoji: "",
+      rideName: "Weekend Group Carpool",
+      date: "2025-06-07",
+      time: "10:00 AM",
+      location: "Monmouth Mall",
+      coordinates: { lat: 40.2895, lng: -74.0565 },
+      driver: "Jake Martinez",
+      passengers: 4,
+      currentNumPassengers: 1
+    },
+    {
+      color: "42d415",
+      rideEmoji: "",
+      rideName: "Soccer Practice Pickup",
+      date: "2025-06-05",
+      time: "04:45 PM",
+      location: "Freehold Soccer Complex",
+      coordinates: { lat: 40.2418, lng: -74.2882 },
+      driver: "Sophia Lee",
+      passengers: 2,
+      currentNumPassengers: 0
+    },
+    {
+      color: "F7374F",
+      rideEmoji: "🎤",
+      rideName: "Concert Road Trip",
+      date: "2025-06-08",
+      time: "06:30 PM",
+      location: "PNC Bank Arts Center",
+      coordinates: { lat: 40.3929, lng: -74.1710 },
+      driver: "Ryan Thompson",
+      passengers: 5,
+      currentNumPassengers: 0
+    },
+    {
+      color: "6cd4c1",
+      rideEmoji: "",
+      rideName: "Library Study Group",
+      date: "2025-06-06",
+      time: "02:00 PM",
+      location: "Freehold Public Library",
+      coordinates: { lat: 40.2601, lng: -74.2732 },
+      driver: "Lucas Scott",
+      passengers: 3,
+      currentNumPassengers: 0
+    }
+  ];
 
 // Predefined distinct colors based on color theory
 const distinctColors = [
@@ -73,18 +135,20 @@ function getInfoContent(event) {
     `;
 }
 
-function initMap() {
-    fetch('./ScheduledEvents.json')
-        .then(res => {
-            if (!res.ok) throw new Error("Failed to load scheduled events JSON");
-            return res.json();
-        })
-        .then(data => {
-            renderEventsOnMap(data.scheduledEvents);
-        })
-        .catch(err => {
-            console.error("Error loading event data:", err);
-        });
+async function initMap() {
+  const map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: 40.7128, lng: -74.006 }, // Example coordinates
+    zoom: 10,
+  });
+
+  // Use the predefined JSON data
+  scheduledEvents.forEach((event) => {
+    new google.maps.Marker({
+      position: { lat: event.coordinates.lat, lng: event.coordinates.lng },
+      map,
+      title: event.rideName,
+    });
+  });
 }
 
 function renderEventsOnMap(events) {

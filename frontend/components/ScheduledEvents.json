@@ -7,6 +7,7 @@
       "date": "2025-06-04",
       "time": "07:30 AM",
       "location": "Freehold Township High School",
+      "coordinates": { "lat": 40.2601, "lng": -74.2732 },
       "driver": "Emily Carter",
       "passengers": 3,
       "currentNumPassengers": 3
@@ -18,6 +19,7 @@
       "date": "2025-06-07",
       "time": "10:00 AM",
       "location": "Monmouth Mall",
+      "coordinates": { "lat": 40.2895, "lng": -74.0565 },
       "driver": "Jake Martinez",
       "passengers": 4,
       "currentNumPassengers": 1
@@ -29,6 +31,7 @@
       "date": "2025-06-05",
       "time": "04:45 PM",
       "location": "Freehold Soccer Complex",
+      "coordinates": { "lat": 40.2418, "lng": -74.2882 },
       "driver": "Sophia Lee",
       "passengers": 2,
       "currentNumPassengers": 0
@@ -40,6 +43,7 @@
       "date": "2025-06-08",
       "time": "06:30 PM",
       "location": "PNC Bank Arts Center",
+      "coordinates": { "lat": 40.3929, "lng": -74.1710 },
       "driver": "Ryan Thompson",
       "passengers": 5,
       "currentNumPassengers": 0
@@ -51,6 +55,7 @@
       "date": "2025-06-06",
       "time": "02:00 PM",
       "location": "Freehold Public Library",
+      "coordinates": { "lat": 40.2601, "lng": -74.2732 },
       "driver": "Lucas Scott",
       "passengers": 3,
       "currentNumPassengers": 0
