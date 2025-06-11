@@ -141,6 +141,27 @@ func GetCurrentUser(c *gin.Context) {
 	})
 }
 
+// Add this function to your auth handlers
+func Logout(c *gin.Context) {
+	userID := c.GetString("userID")
+
+	// Log the logout event
+	if userID != "" {
+		fmt.Printf("🚪 User %s logging out\n", userID)
+	}
+
+	// In a production app, you might want to:
+	// 1. Invalidate the JWT token (add to blacklist)
+	// 2. Clear any server-side session data
+	// 3. Log the logout event to analytics
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Logged out successfully 👋",
+		"status":   "success",
+		"redirect": "/login", // Frontend can use this for navigation
+	})
+}
+
 // Helper functions
 func generateRandomState() string {
 	bytes := make([]byte, 32)

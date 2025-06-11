@@ -98,12 +98,16 @@ class ApiClient {
     console.log('🚪 API logout request...');
     try {
       const result = await this.request('/auth/logout', { method: 'POST' });
-      console.log('✅ API logout successful');
+      console.log('✅ API logout successful:', result);
       return result;
     } catch (error) {
-      console.log('⚠️ API logout failed (server might be down):', error.message);
+      console.log('⚠️ API logout failed:', error.message);
       // Don't throw error - local logout will still work
-      return { success: true };
+      return { 
+        success: true, 
+        message: 'Logged out locally (server unreachable)',
+        localOnly: true 
+      };
     }
   }
 
