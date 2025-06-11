@@ -1,4 +1,3 @@
-https://prod.liveshare.vsengsaas.visualstudio.com/join?D88557289949A6E6C140DB635A015F1CE246
 
 # Developer Notes
 
