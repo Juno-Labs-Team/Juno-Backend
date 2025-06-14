@@ -49,3 +49,5 @@ android/keystores/debug.keystore
 .env
 
 fascinated-orange-waffles/
+
+deploy.ps1
