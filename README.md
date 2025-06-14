@@ -6,6 +6,11 @@ https://jubilant-halibut-jjjpr6gp9gjqfpq95-8081.app.github.dev/
 should i deaduzz name ts Juno  
 [snack preview](https://snack.expo.dev/@nogambling/fascinated-orange-waffles)
 
+
+
+A whole redesign of the UI to match the liquid glass aesthetic of iOS 26
+
+
 ---
 
 Juno is a  rideshare app for making it easier to communicate rideshare info, carpooling, etc.  
