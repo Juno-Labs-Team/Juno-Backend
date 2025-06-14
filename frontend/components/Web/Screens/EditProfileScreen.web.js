@@ -13,8 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '../../contexts/AuthContext';
-import apiClient from '../../services/api';
+import { useAuth } from '../../../contexts/AuthContext';
+import apiClient from '../../../services/api';
 
 const NEON = '#00ffe7';
 

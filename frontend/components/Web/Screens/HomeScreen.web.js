@@ -12,8 +12,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../contexts/AuthContext';
-import apiClient from '../services/api';
+import { useAuth } from '../../../contexts/AuthContext';
+import apiClient from '../../../services/api';
 
 const NEON = '#00ffe7';
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -111,111 +111,130 @@ const MAP_WIDGET_HTML = (rides) => `
     }
 
     function renderEventsOnMap(events) {
-        const map = new google.maps.Map(document.getElementById("map"), {
-            center: { lat: 40.260393, lng: -74.273017 },
-            zoom: 8,
-            styles: ultraMinimalDarkMapStyles,
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false
-        });
-        new google.maps.Marker({
-            position: { lat: 40.260393, lng: -74.273017 },
+    const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 40.260393, lng: -74.273017 },
+        zoom: 8,
+        styles: ultraMinimalDarkMapStyles,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false
+    });
+
+    // Add a marker for the origin (Freehold High School)
+    new google.maps.Marker({
+        position: { lat: 40.260393, lng: -74.273017 },
+        map,
+        icon: {
+            path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+            scale: 5,
+            fillColor: "#FFFF33",
+            fillOpacity: 1,
+            strokeColor: "#222",
+            strokeWeight: 2
+        }
+    });
+
+    const infowindow = new google.maps.InfoWindow();
+
+    events.forEach((event, index) => {
+        // Use the ride's own origin if available, otherwise default to Freehold High School
+        const originLatLng = event.location && event.location.origin
+            ? { lat: event.location.origin.lat, lng: event.location.origin.lng }
+            : { lat: 40.260393, lng: -74.273017 };
+
+        const destLatLng = event.location && event.location.destination
+            ? { lat: event.location.destination.lat, lng: event.location.destination.lng }
+            : null;
+
+        if (!destLatLng) return;
+
+        const color = distinctColors[index % distinctColors.length];
+        event.color = color.replace("#", "");
+
+        // Add a marker for the destination
+        const marker = new google.maps.Marker({
+            position: destLatLng,
             map,
             icon: {
-                path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-                scale: 5,
-                fillColor: "#FFFF33",
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: color,
                 fillOpacity: 1,
-                strokeColor: "#222",
+                strokeColor: "#fff",
                 strokeWeight: 2
             }
         });
-        const infowindow = new google.maps.InfoWindow();
-        events.forEach((event, index) => {
-            // Use the ride's own origin if available, otherwise default to Freehold High School
-            const originLatLng = event.location && event.location.origin
-              ? { lat: event.location.origin.lat, lng: event.location.origin.lng }
-              : { lat: 40.260393, lng: -74.273017 };
 
-            const destLatLng = event.location && event.location.destination
-              ? { lat: event.location.destination.lat, lng: event.location.destination.lng }
-              : null;
-            if (!destLatLng) return;
-            const color = distinctColors[index % distinctColors.length];
-            event.color = color.replace("#", "");
-            const marker = new google.maps.Marker({
-                position: destLatLng,
-                map,
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 8,
-                    fillColor: color,
-                    fillOpacity: 1,
-                    strokeColor: "#fff",
-                    strokeWeight: 2
-                }
-            });
-            marker.addListener("click", function () {
-                infowindow.setContent(getInfoContent(event));
-                infowindow.open(map, marker);
-            });
-            map.addListener('click', function() { infowindow.close(); });
-
-            let waypoints = [];
-            if (event.waypoints && event.waypoints.length) {
-                waypoints = event.waypoints.map(wp => ({
-                    location: { lat: wp.lat, lng: wp.lng }, stopover: true
-                }));
-                event.waypoints.forEach((wp) => {
-                    const waypointMarker = new google.maps.Marker({
-                        position: { lat: wp.lat, lng: wp.lng },
-                        map,
-                        icon: {
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 5,
-                            fillColor: color,
-                            fillOpacity: 0.55,
-                            strokeColor: "#fff",
-                            strokeWeight: 1.2
-                        }
-                    });
-                    // Info window for waypoint
-                    const wpInfoWindow = new google.maps.InfoWindow({
-                        content: wp.name || "Stop"
-                    });
-                    waypointMarker.addListener('click', () => {
-                        wpInfoWindow.open(map, waypointMarker);
-                    });
-                });
-            }
-            const directionsService = new google.maps.DirectionsService();
-            const directionsRenderer = new google.maps.DirectionsRenderer({
-                map: map,
-                suppressMarkers: true,
-                polylineOptions: {
-                    strokeColor: color,
-                    strokeOpacity: 1.0,
-                    strokeWeight: 6
-                }
-            });
-            directionsService.route(
-                {
-                    origin: originLatLng,
-                    destination: destLatLng,
-                    waypoints: waypoints,
-                    travelMode: google.maps.TravelMode.DRIVING
-                },
-                (result, status) => {
-                    if (status === google.maps.DirectionsStatus.OK) {
-                        directionsRenderer.setDirections(result);
-                    } else {
-                        console.error("Directions request failed due to: " + status);
-                    }
-                }
-            );
+        marker.addListener("click", function () {
+            infowindow.setContent(getInfoContent(event));
+            infowindow.open(map, marker);
         });
-    }
+
+        map.addListener('click', function () { infowindow.close(); });
+
+        // Add waypoints if available
+        let waypoints = [];
+        if (event.waypoints && event.waypoints.length) {
+            waypoints = event.waypoints.map(wp => ({
+                location: { lat: wp.lat, lng: wp.lng },
+                stopover: true
+            }));
+
+            event.waypoints.forEach((wp) => {
+                const waypointMarker = new google.maps.Marker({
+                    position: { lat: wp.lat, lng: wp.lng },
+                    map,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 5,
+                        fillColor: color,
+                        fillOpacity: 0.55,
+                        strokeColor: "#fff",
+                        strokeWeight: 1.2
+                    }
+                });
+
+                // Info window for waypoint
+                const wpInfoWindow = new google.maps.InfoWindow({
+                    content: wp.name || "Stop"
+                });
+
+                waypointMarker.addListener('click', () => {
+                    wpInfoWindow.open(map, waypointMarker);
+                });
+            });
+        }
+
+        // Create a new DirectionsRenderer for each route
+        const directionsService = new google.maps.DirectionsService();
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+            map: map,
+            suppressMarkers: true,
+            polylineOptions: {
+                strokeColor: color,
+                strokeOpacity: 1.0,
+                strokeWeight: 6
+            }
+        });
+
+        // Request the route
+        directionsService.route(
+            {
+                origin: originLatLng,
+                destination: destLatLng,
+                waypoints: waypoints,
+                travelMode: google.maps.TravelMode.DRIVING
+            },
+            (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    directionsRenderer.setDirections(result);
+                } else {
+                    console.error("Directions request failed due to: " + status);
+                }
+            }
+        );
+    });
+}
     function initMap() { renderEventsOnMap(scheduledEvents); }
     window.initMap = initMap;
   </script>

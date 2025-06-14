@@ -9,7 +9,7 @@ import {
   Alert 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ApiClient from '../services/api';
+import ApiClient from '../../services/api';
 
 const RidesScreen = () => {
   const [rides, setRides] = useState([]);

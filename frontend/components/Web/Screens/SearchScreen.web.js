@@ -14,7 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import apiClient from '../services/api';
+import apiClient from '../../../services/api';
 
 const NEON = '#00ffe7';
 

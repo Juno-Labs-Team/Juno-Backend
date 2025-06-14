@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import apiClient from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import apiClient from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NEON = '#00ffe7';
 

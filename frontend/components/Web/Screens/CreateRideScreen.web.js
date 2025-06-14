@@ -15,8 +15,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import apiClient from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import apiClient from '../../../services/api';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // Conditional import for DateTimePicker
 let DateTimePicker;
