@@ -1,0 +1,79 @@
+# Juno Backend - Docker Ignore File
+# Exclude unnecessary files from Docker build context
+
+# Build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+juno-backend
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+README.md
+
+# Deployment scripts (don't need these in container)
+deploy.ps1
+deploy-fixed.ps1
+*.ps1
+
+# Environment files (these are set via Cloud Run env vars)
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Documentation
+docs/
+*.md
+
+# Testing
+coverage.txt
+coverage.html
+
+# Dependencies (will be downloaded in container)
+vendor/
+
+# Temporary files
+tmp/
+temp/
+
+# Node modules (if any)
+node_modules/
+
+# Legacy backend (if still present)
+../legacy-backend/
+
+# Frontend files
+../frontend/
