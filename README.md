@@ -7,6 +7,8 @@ should i deaduzz name ts Juno
 [snack preview](https://snack.expo.dev/@nogambling/fascinated-orange-waffles)
 
 
+ok grandma calm down
+
 
 A whole redesign of the UI to match the liquid glass aesthetic of iOS 26
 
