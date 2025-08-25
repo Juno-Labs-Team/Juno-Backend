@@ -1,7 +1,6 @@
 # Juno Rideshare 🚗
-> Commit MESSAGE:
-> Rollback State
-https://jubilant-halibut-jjjpr6gp9gjqfpq95-8081.app.github.dev/
+
+i'll get back to this in a little, i'm going to self host my own DB
 
 should i deaduzz name ts Juno  
 [snack preview](https://snack.expo.dev/@nogambling/fascinated-orange-waffles)
