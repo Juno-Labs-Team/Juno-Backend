@@ -10,7 +10,7 @@ redesign
 
 A whole redesign of the UI to match the liquid glass aesthetic of iOS 26
 
-
+yes
 ---
 
 Juno is a  rideshare app for making it easier to communicate rideshare info, carpooling, etc.  
