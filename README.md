@@ -2,6 +2,8 @@
 
 i'll get back to this in a little, i'm going to self host my own DB
 
+when?
+
 should i deaduzz name ts Juno  
 [snack preview](https://snack.expo.dev/@nogambling/fascinated-orange-waffles)
 
