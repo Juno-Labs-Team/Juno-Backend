@@ -34,8 +34,8 @@ func main() {
 
 	log.Printf("🚀 Server starting on port %s", port)
 	if os.Getenv("K_SERVICE") != "" {
-		log.Printf("🔗 Production URL: https://juno-backend-587837548118.us-east4.run.app")
-		log.Printf("🔐 OAuth URL: https://juno-backend-587837548118.us-east4.run.app/auth/google")
+		log.Printf("🔗 change the production URL")
+		log.Printf("🔐 change OAUTH (IMMEDIATELY)")
 	} else {
 		log.Printf("🔗 Local URL: http://localhost:%s", port)
 		log.Printf("🔐 OAuth URL: http://localhost:%s/auth/google", port)
